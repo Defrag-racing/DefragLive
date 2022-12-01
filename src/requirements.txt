@@ -3,6 +3,7 @@ aiohttp==3.6.3
 aiorun==2020.11.1
 altgraph==0.17
 amqp==5.0.1
+asgiref==3.3.4
 async-timeout==3.0.1
 attrs==20.2.0
 backcall==0.2.0
@@ -39,6 +40,7 @@ pefile==2019.4.18
 pickleshare==0.7.5
 Pillow==8.0.0
 prompt-toolkit==3.0.8
+pyahocorasick==1.4.4
 Pygments==2.7.2
 pygtail==0.11.1
 pyinstaller==4.0
@@ -61,6 +63,7 @@ termcolor==1.1.0
 traitlets==5.0.5
 twitchio==1.1.0
 urllib3==1.25.11
+uvicorn==0.18.3
 vine==5.0.0
 wcwidth==0.2.5
 websockets==8.1

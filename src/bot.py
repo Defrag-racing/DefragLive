@@ -1,4 +1,5 @@
 # bot.py
+from distutils.log import debug
 import os # for importing env vars for the bot to use
 from twitchio.ext import commands
 import config
@@ -8,17 +9,17 @@ import servers
 import time
 import console
 import serverstate
+import websocket_console
 from env import environ
 import threading
 import asyncio
-import websockets
-import json
 from multiprocessing import Process
 import logging
 from datetime import datetime
 import sys
 import pathlib
 import twitch_commands
+import filters
 
 df_channel = environ['CHANNEL'] if 'CHANNEL' in environ and environ['CHANNEL'] != "" else input("Your twitch channel name: ")
 
@@ -47,7 +48,7 @@ TWITCH_CMDS = [
     ["angles"],
     ["obs"],
     ["drawgun"],
-    ["clean"],
+##    ["clean"],
     ["sky"],
     ["speedinfo"],
     ["speedorig"],
@@ -60,7 +61,7 @@ TWITCH_CMDS = [
     ["n1"],
     ["map"],
     ["check"],
-    ["speclist"],
+##    ["speclist"],
     ["spec"],
     ["brightness"],
     ["picmip"],
@@ -69,8 +70,9 @@ TWITCH_CMDS = [
     ["reshade"],
     ["next", "n"],
     ["prev", "p"],
-    ["scores", "scoreboard","score","scoreboards","scr","sc","scrs","scors","scroes","scar","scora","sorces","scoars","scs","scrose"],
-    ["server", "sv"]
+##    ["scores", "scoreboard","score","scoreboards","scr","sc","scrs","scors","scroes","scar","scora","sorces","scoars","scs","scrose"],
+    ["server", "sv"],
+    ["ip"]
 ]
 
 # bot setup
@@ -183,135 +185,12 @@ def launch():
     subprocess.Popen(args=[config.DF_EXE_PATH, "+cl_title", "TwitchBot Engine", "+con_title", "TwitchBot Console", "+connect", launch_ip], cwd=os.path.dirname(config.DF_EXE_PATH))
 
 
-# ------------------------------------------------------------
-# - Flask API for the twitch extension
-# ------------------------------------------------------------
-
-from flask import Flask, jsonify, request
-app = Flask(__name__)
-
-
-@app.route('/console')
-def parsed_console_log():
-    output = console.CONSOLE_DISPLAY[-75:] # [::-1] = reversed. console needs new messages at bottom
-    output = jsonify(output)
-
-    # TODO: fix CORS for production
-    output.headers['Access-Control-Allow-Origin'] = '*'
-
-    return output
-
-
-@app.route('/console/raw')
-def raw_console_log():
-    output = console.LOG[::-1]
-    output = jsonify(output)
-
-    # TODO: fix CORS for production
-    output.headers['Access-Control-Allow-Origin'] = '*'
-
-    return output
-
-
-@app.route('/console/send', methods=['POST'])
-def send_message():
-    author = request.form.get('author', None)
-    message = request.form.get('message', None)
-    command = request.form.get('command', None)
-
-    if command is not None and command.startswith("!"):
-        if ";" in command:  # prevent q3 command injections
-            command = command[:command.index(";")]
-        api.exec_command(command)
-        return jsonify(result=f"Sent mdd command {command}")
-    else:
-        if ";" in message:  # prevent q3 command injections
-            message = message[:message.index(";")]
-        api.exec_command(f"say {author} ^7> ^2{message}")
-        return jsonify(result=f"Sent {author} ^7> ^2{message}")
-
-    return jsonify(result="Unknown message")
-
-
-# ------------------------------------------------------------
-# - Websocket client
-# ------------------------------------------------------------
-
-def on_ws_message(msg):
-    message = {}
-
-    if msg is None:
-        return
-
-    try:
-        message = json.loads(msg)
-    except Exception as e:
-        logging.info('ERROR [on_ws_message]:', e)
-        return
-
-    # if there is no origin, exit
-    # this function only processes messages directly from twitch console extension
-    if 'origin' not in message:
-            return
-    
-    if 'message' in message:
-        if message['message'] is None:
-            message['message'] = {}
-
-        message_text = message['message']['content']
-
-        if ";" in message_text:  # prevent q3 command injections
-            message_text = message_text[:message_text.index(";")]
-
-        if message_text.startswith("!"):  # proxy mod commands (!top, !rank, etc.)
-            logging.info("proxy command received")
-            api.exec_command(message_text)
-            time.sleep(1)
-        else:
-            author = message['message']['author']
-            author += ' ^7> '
-            author_color_num = min(ord(author[0].lower()), 9) # replace ^[a-z] with ^[0-9]
-            message_content = message_text.lstrip('>').lstrip('<')
-            api.exec_command(f"say ^{author_color_num}{author} ^2{message_content}")
-
-
-async def ws_send(uri, q):
-    async with websockets.connect(uri) as websocket:
-         while True:
-            try:
-                msg = await asyncio.wait_for(websocket.recv(), timeout=0.5)
-                on_ws_message(msg)
-            except asyncio.TimeoutError:
-                if not q.empty():
-                    msg = q.get()
-                    if msg == '>>quit<<':
-                        await websocket.close(reason='KTHXBYE!')
-                    else:
-                        await websocket.send(msg)
-            except:
-                if(websocket.closed):
-                    logging.info('\nDisconnected from WS server?')
-                    logging.info('Trying reconnect. Please check if the websocket server is running!\n')
-                    websocket = websockets.connect(uri)
-                    
-                await asyncio.sleep(1)
-                continue
-
-
-def ws_worker(q, loop):
-    try:
-        loop.run_until_complete(ws_send(config.WS_ADDRESS, q))
-    except websockets.exceptions.WebSocketException as e:
-        logging.info('\nWebsocket error:', e)
-        logging.info('Please check if the websocket server is running!\n')
-        time.sleep(1)
-    finally:
-        ws_worker(q, loop)
-
 
 if __name__ == "__main__":
     config.read_cfg()
     window_flag = False
+
+    filters.init()
 
     twitchbot_logfile =f'{datetime.now().strftime("%m-%d-%Y_%H-%M-%S")}_twitchbot.log'
     file_handler = logging.FileHandler(filename=os.path.join(environ['LOG_DIR_PATH'], twitchbot_logfile))
@@ -338,12 +217,28 @@ if __name__ == "__main__":
     serverstate_thread = threading.Thread(target=serverstate.start, daemon=True)
     serverstate_thread.start()
 
-    # flask_thread = threading.Thread(target=app.run, daemon=True)
-    # flask_thread.start()
-    #
-    # ws_loop = asyncio.new_event_loop()
-    # ws_thread = threading.Thread(target=ws_worker, args=(console.WS_Q, ws_loop,), daemon=True)
-    # ws_thread.start()
+    if config.DEVELOPMENT:
+        flask_thread = threading.Thread(target=websocket_console.app.run, 
+                                        daemon=True,
+                                        kwargs={
+                                            'host': environ['FLASK_SERVER']['host'], 
+                                            'port': environ['FLASK_SERVER']['port'],
+                                        }
+        )
+    else:
+        flask_thread = threading.Thread(target=websocket_console.run_flask_server, 
+                                        daemon=True, 
+                                        kwargs={
+                                            'host': environ['FLASK_SERVER']['host'], 
+                                            'port': environ['FLASK_SERVER']['port']
+                                        }
+        )
+
+    flask_thread.start()
+    
+    ws_loop = asyncio.new_event_loop()
+    ws_thread = threading.Thread(target=websocket_console.ws_worker, args=(console.WS_Q, ws_loop,), daemon=True)
+    ws_thread.start()
 
     bot_thread = threading.Thread(target=bot.run, daemon=True)
     bot_thread.start()

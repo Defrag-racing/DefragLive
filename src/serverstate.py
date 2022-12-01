@@ -17,12 +17,17 @@ import config
 import os
 import servers
 import logging
+import threading
+import json
+from hashlib import md5
+# import mapdata
+from websocket_console import notify_serverstate_change
 
 
 # Configurable variables, Strike = 2seconds
 MESSAGE_REPEATS = 1  # How many times to spam info messages. 0 for no messages.
-AFK_TIMEOUT = 40  # Switch after afk detected x consecutive times.
-IDLE_TIMEOUT = 5  # Alone in server timeout.
+AFK_TIMEOUT = 999999 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
+IDLE_TIMEOUT = 999999 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 15  # Amount of time to standby in minutes
 VOTE_TALLY_TIME = 5  # Amount of time to wait while tallying votes
@@ -36,6 +41,8 @@ VID_RESTARTING = False
 STATE_INITIALIZED = False
 LAST_REPORT_TIME = time.time()
 LAST_INIT_REPORT_TIME = time.time()
+
+# mapdata_thread = threading.Thread(target=mapdata.mapdataHook, daemon=True)
 
 
 class State:
@@ -60,6 +67,7 @@ class State:
         self.vy_count = 0
         self.vn_count = 0
         self.voter_names = []
+        self.show_name = True
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -160,7 +168,7 @@ def start():
     global PAUSE_STATE
     global VID_RESTARTING
 
-    prev_state, curr_state = None, None
+    prev_state, prev_state_hash, curr_state = None, None, None
     initialize_state()
     while True:
         try:
@@ -186,12 +194,14 @@ def start():
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
                         validate_state()  # Check for nospec, self spec, afk, and any other problems.
+                        curr_state_hash = md5(f'{curr_state}_{num_players}_{str([pl.__dict__ for pl in STATE.players])}'.encode('utf-8')).digest()
                         if STATE.current_player is not None and STATE.current_player_id != STATE.bot_id:
                             curr_state = f"Spectating {STATE.current_player.n} on {STATE.mapname}" \
                                          f" in server {STATE.hostname} | ip: {STATE.ip}"
-                        if curr_state != prev_state:
-                            logging.info(curr_state)
+                        if curr_state_hash != prev_state_hash:
+                            notify_serverstate_change() # Notify all websocket clients about new serverstate
                         prev_state = curr_state
+                        prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
                 if getattr(STATE, 'vote_active', False):
                     STATE.handle_vote()
@@ -199,7 +209,7 @@ def start():
             if e.args[0] == 'Paused':
                 pass
             else:
-                prev_state, curr_state = None, None
+                prev_state, prev_state_hash, curr_state = None, None, None
                 initialize_state()  # Handle the first state fetch. Some extra processing needs to be done this time.
                 logging.info(f"State failed: {e}")
             time.sleep(1)
@@ -252,6 +262,9 @@ def initialize_state():
         logging.info("State Initialized.")
     except:
         return False
+
+    # if not mapdata_thread.is_alive():
+    #     mapdata_thread.start()
 
     return True
 
@@ -433,7 +446,7 @@ def spectate_player(follow_id):
     IGNORE_IPS = []
     STATE.afk_list = []
     if follow_id in STATE.spec_ids:
-        display_player_name(follow_id)
+##        display_player_name(follow_id)
         api.exec_command(f"follow {follow_id}")  # Follow this player.
         STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
         STATE.current_player_id = follow_id  # Notify the state object of the new player we are spectating.
@@ -450,8 +463,25 @@ def display_player_name(follow_id):
     follow_player = STATE.get_player_by_id(follow_id)
     if follow_player is not None:
         player_name = follow_player.n
-        display_name = player_name if player_name.strip() not in config.get_list('blacklist_names') else "*" * len(player_name)
-        # api.exec_command(f"set player-name {display_name}") # uncomment to censor blacklisted names
+        if check_for_blacklist_name(player_name):
+            if STATE.show_name == True:
+                logging.info(f"name is blacklisted: {player_name}")
+                api.exec_command(f"set df_hud_drawSpecfollow 0")
+                STATE.show_name = False
+        else:
+            if STATE.show_name == False:
+                api.exec_command(f"set df_hud_drawSpecfollow 1")
+                STATE.show_name = True
+
+
+
+def check_for_blacklist_name(plyr_name):
+    name = plyr_name.strip()
+    blacklisted_words = config.get_list('blacklist_names')
+    for word in blacklisted_words:
+        if word in name.lower():
+            return True
+    return False
 
 
 def get_svinfo_report(filename):

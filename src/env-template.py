@@ -11,6 +11,10 @@ environ = {
     "SVINFO_REPORT_NAME": "serverstate.txt",
     "CHANNEL": "",
     "WS_ADDRESS": "ws://localhost:5005",
+    "FLASK_SERVER": {
+        "host": "127.0.0.1",
+        "port": 5000
+    },
     "LOG_DIR_PATH": "C:\\Absolute\\Path\\To\\Logs\\Folder",
     "TWITCH_API": {
         "client_id": "",
@@ -20,5 +24,9 @@ environ = {
         'key': "",
         'host': ""
     },
-    "DEVELOPMENT": False # True if you're developing, False if you're using the production server
+    "DEVELOPMENT": False, # True if you're developing, False if you're using the production server
+    "MAP_DATA": {
+        "STORAGE_PATH": "",
+        "MAPDATA_TABLE": ""
+    }
 }

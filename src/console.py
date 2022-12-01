@@ -4,11 +4,8 @@ This file has the following purposes:
 2. Listens for commands and starts the proper pipeline when a command is activated.
 3. Formats chat, server prints, and server notifications nicely for the twitch extension.
 """
-
-
 import os
 import time
-import dfcommands as cmd
 import re
 import queue
 import json
@@ -16,6 +13,10 @@ import api
 from hashlib import blake2b
 import logging
 import twitch_commands
+
+import dfcommands as cmd
+import filters
+import serverstate
 
 LOG = []
 CONSOLE_DISPLAY = []
@@ -28,7 +29,9 @@ def read_tail(thefile):
         '''
         Generator function that yields new lines in a file
         '''
+
         global STOP_CONSOLE
+
         # seek the end of the file
         thefile.seek(0, os.SEEK_END)
         
@@ -39,7 +42,7 @@ def read_tail(thefile):
 
             # sleep if file hasn't been updated
             if not line:
-                time.sleep(0.5)
+                time.sleep(0.25)
                 continue
 
             yield line
@@ -71,6 +74,9 @@ def read(file_path: str):
 
             line_data = process_line(line)
 
+            # Filter
+            line_data = filters.filter_line_data(line_data)
+
             LOG.append(line_data)
 
             # Cut log to size
@@ -86,7 +92,16 @@ def read(file_path: str):
                 except Exception as e:
                     logging.info(f"Error occurred for in-game command {command}: {e}")
 
-            if line_data["type"] in ["PRINT", "SAY", "ANNOUNCE"]:
+            if line_data["type"] in ["PRINT", 
+                                     "SAY", 
+                                     "ANNOUNCE", 
+                                     "RENAME", 
+                                     "CONNECTED", 
+                                     "DISCONNECTED", 
+                                     "ENTEREDGAME", 
+                                     "JOINEDSPEC",
+                                     "REACHEDFINISH",
+                                     "YOURRANK"]:
                 CONSOLE_DISPLAY.append(line_data)
                 WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
 
@@ -108,7 +123,6 @@ def process_line(line):
     :param line: Console line to be processed
     :return: Data dictionary containing useful data about the line
     """
-    import serverstate
     line = line.strip()
 
     line_data = {
@@ -131,13 +145,6 @@ def process_line(line):
             pass
         else:
             logging.info(f"[Q3] {line}")
-
-        for error in errors:
-            if error in line:
-                logging.info(f"Error detected: [{line}]")
-                logging.info("Executing command restart")
-                twitch_commands.restart(None, None, None)
-                break
 
         if line in {"VoteVote passed.", "RE_Shutdown( 0 )"}:
             if not serverstate.PAUSE_STATE:
@@ -164,7 +171,7 @@ def process_line(line):
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
-        if 'Com_TouchMemory' in line or "report written to system/reports/initialstate.txt" in line:
+        if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
                 time.sleep(1)
                 serverstate.CONNECTING = False
@@ -236,7 +243,85 @@ def process_line(line):
             line_data["author"] = None
             line_data["content"] = scores
 
-        for fun in [parse_chat_message, parse_chat_announce, parse_print, parse_scores]:
+        def parse_rename(command):
+            if ' renamed to ' in command:
+                line_data["id"] = message_to_id(f"RENAME_{command}")
+                line_data["type"] = "RENAME"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_connected(command):
+            if ' ^7connected' in command:
+                line_data["id"] = message_to_id(f"CONNECTED_{command}")
+                line_data["type"] = "CONNECTED"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_disconnected(command):
+            if ' disconnected' in command:
+                line_data["id"] = message_to_id(f"DISCONNECTED_{command}")
+                line_data["type"] = "DISCONNECTED"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_entered_game(command):
+            if ' entered the game.' in command:
+                line_data["id"] = message_to_id(f"ENTEREDGAME_{command}")
+                line_data["type"] = "ENTEREDGAME"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_joined_spec(command):
+            if ' joined the spectators.' in command:
+                line_data["id"] = message_to_id(f"JOINEDSPEC_{command}")
+                line_data["type"] = "JOINEDSPEC"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_reached_finish(command):
+            if ' reached the finish line in ' in command:
+                line_data["id"] = message_to_id(f"REACHEDFINISH_{command}")
+                line_data["type"] = "REACHEDFINISH"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_your_rank(command):
+            if ' you are now rank ' in command:
+                line_data["id"] = message_to_id(f"YOURRANK_{command}")
+                line_data["type"] = "YOURRANK"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        # TODO: '... broke the server record ...'
+        # TODO: '!top results?'
+        # logging.info(f'LINE: {line}')
+
+        for fun in [
+                    parse_chat_message, 
+                    parse_chat_announce, 
+                    parse_print, 
+                    parse_scores, 
+                    parse_rename, 
+                    parse_connected,
+                    parse_disconnected,
+                    parse_entered_game,
+                    parse_joined_spec,
+                    parse_reached_finish,
+                    parse_your_rank]:
             try:
                 # fun(sv_command)
                 fun(line)
@@ -246,7 +331,7 @@ def process_line(line):
     except:
         return line_data
 
-    # print((line_data)
+    # logging.info(line_data)
     return line_data
 
 

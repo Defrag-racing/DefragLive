@@ -89,3 +89,6 @@ def hold_key(x, duration):
         WINDOW.send(x, blocking=True, press_duration=duration * 1000)
     except AttributeError:
         logging.info(f"Window not active. {x} was not sent to the client.")
+
+def reset_visuals():
+    exec_command(f"df_chs1_Info6 0;r_picmip 0;r_gamma 1;r_mapoverbrightbits 2;df_mp_NoDrawRadius 100;cg_drawgun 1")
