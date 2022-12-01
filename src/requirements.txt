@@ -24,3 +24,11 @@ termcolor==1.1.0
 twitchio==1.1.0
 uvicorn==0.18.3
 websockets==8.1
+
+MarkupSafe==1.1.1
+multidict==4.7.6
+parso==0.7.1
+passlib==1.7.4
+pefile==2019.4.18
+pickleshare==0.7.5
+Pillow==8.0.0
