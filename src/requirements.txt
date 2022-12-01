@@ -41,8 +41,8 @@ Pillow==8.0.0
 prompt-toolkit==3.0.8
 Pygments==2.7.2
 pygtail==0.11.1
-pyinstaller==4.0
-pyinstaller-hooks-contrib==2020.9
+pyinstaller==5.6.2
+pyinstaller-hooks-contrib==2022.13
 pymongo==3.11.0
 python-dateutil==2.8.1
 python-dotenv==0.14.0
