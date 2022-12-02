@@ -281,7 +281,7 @@ def validate_state():
     global PAUSE_STATE
     global IGNORE_IPS
 
-    spectating_self = False
+    spectating_self = True
 
     # Current player spectated is our bot, and thus idle.
     if STATE.get_player_by_id(STATE.bot_id) is not None:
