@@ -244,19 +244,10 @@ if __name__ == "__main__":
     bot_thread = threading.Thread(target=bot.run, daemon=True)
     bot_thread.start()
 
-    counter = 0
-
     while True:
         try:
             api.api_init()
             time.sleep(5)
-            counter += 1
-
-            # 720 * 5 = 3600 seconds = 60 minuits = 1 hour
-            # meaning we only execute this if-statement every 1 hour
-            if counter == 720:
-                twitch_commands.fixchat(None, 'Neit', None)
-                counter = 0
 
             if not window_flag:
                 logging.info("Found defrag window.")
