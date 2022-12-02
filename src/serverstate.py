@@ -232,6 +232,10 @@ def initialize_state():
         secret = ''.join(random.choice('0123456789ABCDEF') for i in range(16))
         server_info, bot_player, timeout_flag = None, [], 0
 
+        new_ip = servers.get_next_active_server(IGNORE_IPS)
+        logging.info("[SERVERSTATE] Initial Connection Connecting Now : " + str(new_ip))
+        connect(new_ip)
+
         init_counter = 0
         while server_info is None or bot_player == []:  # Continue running this block until valid data and bot id found
             init_counter += 1
