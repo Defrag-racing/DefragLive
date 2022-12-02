@@ -138,7 +138,6 @@ def notify_serverstate_change():
     data = serverstate_to_json()
 
     console.WS_Q.put(json.dumps({'action': 'serverstate', 'message': data}))
-    print('Sent serverstate to websocket')
     logging.info('--- serverstate change ---')
 
 
