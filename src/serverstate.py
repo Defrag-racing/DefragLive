@@ -392,7 +392,7 @@ def connect(ip, caller=None):
     if caller is not None:
         STATE.connect_msg = f"^7Brought by ^3{caller}"
         IGNORE_IPS = []
-    logging.info("[SERVERSTATE] CONNECTING TO: " + str(ip))
+
     api.exec_command("connect " + ip, verbose=False)
 
 
