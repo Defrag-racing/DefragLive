@@ -339,12 +339,12 @@ def validate_state():
                 else:  # No ip left to connect to, go on standby mode.
                     api.exec_command("map st1")
                     STANDBY_START_T = time.time()
-                    msg_switch_t = 2  # time in seconds to switch between the two standby messages
+                    msg_switch_t = 15  # time in seconds to switch between the two standby messages
                     while IGNORE_IPS != [] and (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
-                        api.exec_command("echo ^3No active servers. On standby mode.")
+                        api.exec_command("say ^3No active servers. On standby mode.")
                         #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
                         time.sleep(msg_switch_t)
-                        api.exec_command("echo Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
+                        api.exec_command("say Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
                         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
                         time.sleep(msg_switch_t)
                     IGNORE_IPS = []  # continue after standby time elapsed or viewer has performed an action
