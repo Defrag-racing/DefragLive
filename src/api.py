@@ -40,6 +40,8 @@ def api_init():
                     "\nFileAppend, %console%, * ;", blocking=True)
     WINDOW = AHK.find_window(process=config.DF_EXE_PATH, title=b"TwitchBot Engine")
 
+    logging.info("[DEBUG]" + str(CONSOLE is None) + " " + str(WINDOW is None))
+
     if CONSOLE is None or WINDOW is None:
         raise WindowNotFoundError
 
