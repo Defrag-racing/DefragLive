@@ -68,6 +68,7 @@ TWITCH_CMDS = [
     ["gamma"],
     ["connect", "c"],
     ["reshade"],
+    ["reload"],			   
     ["next", "n"],
     ["prev", "p"],
 ##    ["scores", "scoreboard","score","scoreboards","scr","sc","scrs","scors","scroes","scar","scora","sorces","scoars","scs","scrose"],

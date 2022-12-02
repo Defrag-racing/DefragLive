@@ -59,6 +59,9 @@ async def prev(ctx, author, args):
 ##async def scores(ctx, author, args):
 ##    api.hold_key(config.get_bind("+scores"), 4.5)
 
+async def reload(ctx, author, args):
+    api.hold_key(config.get_bind("+scores"), 0.0001)
+
 
 async def triggers(ctx, author, args):
     api.exec_command(f"toggle r_rendertriggerBrushes 0 1;cg_centertime 3;displaymessage 140 10 ^3{author} ^7has changed: ^3Render Triggers")
