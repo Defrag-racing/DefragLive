@@ -281,12 +281,9 @@ def validate_state():
     global PAUSE_STATE
     global IGNORE_IPS
 
-    spectating_self = True
-
     # Current player spectated is our bot, and thus idle.
-    if STATE.get_player_by_id(STATE.bot_id) is not None:
-        spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn \
-                      or STATE.current_player_id == STATE.bot_id
+    spectating_self = (STATE.get_player_by_id(STATE.bot_id) is not None and STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn) \
+                    or STATE.current_player_id == STATE.bot_id
 
     # Current player spectated has turned on the no-spec system
     spectating_nospec = STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id
