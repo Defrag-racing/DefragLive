@@ -159,6 +159,8 @@ def handle_ws_command(msg):
         return
 
     if content['action'] == 'spectate':
+        logging.info("[CONSOLE] SPECTATE REQUEST")
+
         if content['value'] == 'next':
             serverstate.switch_spec('next')
             api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3Next player")
@@ -166,6 +168,7 @@ def handle_ws_command(msg):
             return
         if 'id:' in content['value']:
             id = content['value'].split(':')[1]
+            logging.info("[CONSOLE] SPECIFIC ID SPECTATE REQUEST " + str(id))
             serverstate.spectate_player(id)
             time.sleep(1)
 
