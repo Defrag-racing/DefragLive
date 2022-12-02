@@ -250,6 +250,7 @@ def initialize_state():
             if init_counter >= INIT_TIMEOUT:
                 # Retry a connection to best server
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
+                logging.info("[SERVERSTATE] Connecting Now : " + str(new_ip))
                 connect(new_ip)
 
         bot_id = bot_player[0].id  # Find our own ID
