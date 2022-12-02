@@ -108,7 +108,7 @@ def get_next_active_server(ignore_list):
     """Returns the next active server omitting the servers given in ignore_list"""
     from config import get_list
     servers_data = scrape_servers_data()
-
+    print(str(servers_data))
     servers_data = apply_whitelist(servers_data)
 
     for ignore_ip in ignore_list:
