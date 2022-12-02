@@ -45,7 +45,6 @@ def api_init():
 
 
 def exec_command(cmd, verbose=True):
-    logging.info(f"Executing command {cmd}")
     if verbose:
         logging.info(f"Execing command {cmd}")
     # send the text to the console window, escape commas (must be `, to show up in chat)
