@@ -211,13 +211,12 @@ if __name__ == "__main__":
 
     from multiprocessing import Process
 
-
-    serverstate_thread = threading.Thread(target=serverstate.start, daemon=True)
-    serverstate_thread.start()
-
     logfile_path = config.DF_DIR + '\\qconsole.log'
     con_thread = threading.Thread(target=console.read, args=(logfile_path,), daemon=True)
     con_thread.start()
+
+    serverstate_thread = threading.Thread(target=serverstate.start, daemon=True)
+    serverstate_thread.start()
 
     if config.DEVELOPMENT:
         flask_thread = threading.Thread(target=websocket_console.app.run, 

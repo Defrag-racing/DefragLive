@@ -1,4 +1,4 @@
-ahk==0.11.1
+ahk==0.14.2
 aiohttp==3.6.3
 aiorun==2020.11.1
 altgraph==0.17
