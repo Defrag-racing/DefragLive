@@ -17,12 +17,20 @@ import twitch_commands
 import dfcommands as cmd
 import filters
 import serverstate
+import servers
 
 LOG = []
 CONSOLE_DISPLAY = []
 FILTERS = ["R_AddMD3Surfaces"]
 WS_Q = queue.Queue()
 STOP_CONSOLE = False
+
+ERROR_FILTERS = {
+    "ERROR: CL_ParseServerMessage:": "RECONNECT",
+    "ERROR: Unhandled exception caught": "RECONNECT",
+    "Signal caught (11)": "RECONNECT"
+    #"ERROR: CM_LoadMap:": "DIFFERENT_IP"
+}
 
 
 def read_tail(thefile):
@@ -123,6 +131,9 @@ def process_line(line):
     :param line: Console line to be processed
     :return: Data dictionary containing useful data about the line
     """
+
+    global ERROR_FILTERS
+
     line = line.strip()
 
     line_data = {
@@ -150,6 +161,14 @@ def process_line(line):
             if not serverstate.PAUSE_STATE:
                 serverstate.PAUSE_STATE = True
                 logging.info("Game is loading. Pausing state.")
+
+        if line in ERROR_FILTERS:
+            if ERROR_FILTERS[line] == "RECONNECT":
+                logging.info("Reconnecting to server...")
+                api.exec_command("connect " + serverstate.STATE.ip)
+            elif ERROR_FILTERS[line] == "DIFFERENT_IP":
+                logging.info("Server IP changed. Reconnecting...")
+                api.exec_command("connect " + servers.get_next_active_server([serverstate.STATE.ip]))
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             """ 

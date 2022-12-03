@@ -42,7 +42,6 @@ TWITCH_CMDS = [
     ["clear"],
     ["lagometer"],
     ["snaps"],
-    ["fixchat"],
     ["cgaz"],
     ["nodraw"],
     ["angles"],
