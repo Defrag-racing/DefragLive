@@ -46,6 +46,9 @@ LAST_INIT_REPORT_TIME = time.time()
 
 
 class State:
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+
     """
     Class that stores data about the state of the server and players
     """
@@ -318,6 +321,10 @@ def validate_state():
                 if not PAUSE_STATE and not spectating_self:
                     logging.info('Nospec detected. Switching...')
                     api.display_message("^7Nospec detected. Switching to the next player.")
+
+                    with open('state.json', 'w') as outfile:
+                        json.dump(STATE.toJSON(), outfile)
+
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
             STATE.idle_counter = 0  # Reset idle counter
