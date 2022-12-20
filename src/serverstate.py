@@ -389,6 +389,7 @@ def connect(ip, caller=None):
     CONNECTING = True
     STATE.idle_counter = 0
     STATE.afk_counter = 0
+    STATE.afk_ids = []
     if caller is not None:
         STATE.connect_msg = f"^7Brought by ^3{caller}"
         IGNORE_IPS = []
