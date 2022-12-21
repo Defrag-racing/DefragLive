@@ -209,6 +209,8 @@ def start():
                         display_player_name(STATE.current_player_id)
                 if getattr(STATE, 'vote_active', False):
                     STATE.handle_vote()
+
+            print("[FUNCTION] Start not loop ...")
         except Exception as e:
             if e.args[0] == 'Paused':
                 pass
