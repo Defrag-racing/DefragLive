@@ -192,6 +192,7 @@ def process_line(line):
 
         if line.startswith("execing team_spect"):
             logging.info("CTF MODE ENTERED")
+            serverstate.initialize_state()
 
         if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
