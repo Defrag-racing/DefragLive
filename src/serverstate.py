@@ -94,6 +94,10 @@ class State:
     def get_inputs(self):
         """Helper functions for easily retrieving the latest inputs recorded from the watched player."""
         bot_player = self.get_player_by_id(self.bot_id)
+
+        if bot_player is None:
+            return ''
+
         return bot_player.c2.replace(' ', '')
 
     def get_specable_players(self):
