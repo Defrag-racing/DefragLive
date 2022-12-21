@@ -96,7 +96,7 @@ class State:
         bot_player = self.get_player_by_id(self.bot_id)
 
         if bot_player is None:
-            return ''
+            return 'F'
 
         return bot_player.c2.replace(' ', '')
 
