@@ -314,7 +314,6 @@ def validate_state():
 
     # Next player choice logic
     if spectating_self or spectating_nospec or spectating_afk:
-        print("SERVERSTATE VALIDATION - HERE")
         follow_id = random.choice(STATE.spec_ids) if STATE.spec_ids != [] else STATE.bot_id  # Find someone else to spec
 
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
