@@ -319,11 +319,11 @@ def validate_state():
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
             if spectating_nospec:
                 if not PAUSE_STATE and not spectating_self:
+                    print("spectating_nospec: " + str(spectating_nospec))
+                    print("state.spec_ids: " + str(json.dumps(STATE.spec_ids)))
+
                     logging.info('Nospec detected. Switching...')
                     api.display_message("^7Nospec detected. Switching to the next player.")
-
-                    with open('state.json', 'w') as outfile:
-                        json.dump(STATE.toJSON(), outfile)
 
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
