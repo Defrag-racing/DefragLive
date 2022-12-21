@@ -180,7 +180,6 @@ def start():
 
             # Only refresh the STATE object if new data has been read and if state is not paused
             while not new_report_exists(config.INITIAL_REPORT_P) and not PAUSE_STATE:
-                print("[FUNCTION] Start ...")
                 time.sleep(2)
 
                 if not PAUSE_STATE:
@@ -209,8 +208,6 @@ def start():
                         display_player_name(STATE.current_player_id)
                 if getattr(STATE, 'vote_active', False):
                     STATE.handle_vote()
-
-            print("[FUNCTION] Start not loop ...")
         except Exception as e:
             if e.args[0] == 'Paused':
                 pass
@@ -240,7 +237,6 @@ def initialize_state():
 
         init_counter = 0
         while server_info is None or bot_player == []:  # Continue running this block until valid data and bot id found
-            print("[FUNCTION] Initializing state...")
             init_counter += 1
             if not PAUSE_STATE:
                 # Set color1 to secret code to determine bot's client id
