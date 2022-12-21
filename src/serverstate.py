@@ -325,6 +325,8 @@ def validate_state():
                 if not PAUSE_STATE and not spectating_self:
                     print("spectating_nospec: " + str(spectating_nospec))
                     print("state.spec_ids: " + str(json.dumps(STATE.spec_ids)))
+                    print("state.current_player_id: " + str(STATE.current_player_id))
+                    print("state.bot_id: " + str(STATE.bot_id))
 
                     logging.info('Nospec detected. Switching...')
                     api.display_message("^7Nospec detected. Switching to the next player.")
