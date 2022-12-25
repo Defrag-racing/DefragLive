@@ -204,7 +204,7 @@ def start():
                         STATE.players = players
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
-                        first_player = get_first_player()
+                        first_player = STATE.get_first_player()
                         STATE.current_player = STATE.get_player_by_id(first_player)
                         STATE.current_player_id = first_player
                         validate_state()  # Check for nospec, self spec, afk, and any other problems.
