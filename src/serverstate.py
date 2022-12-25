@@ -189,6 +189,9 @@ def start():
         try:
             if PAUSE_STATE:
                 raise Exception("Paused")
+            elif new_report_exists(config.INITIAL_REPORT_P):
+                initialize_state()
+                
 
             # Only refresh the STATE object if new data has been read and if state is not paused
             while not new_report_exists(config.INITIAL_REPORT_P) and not PAUSE_STATE:
@@ -206,9 +209,6 @@ def start():
 
                     if bool(server_info):  # New data is not empty and valid. Update the state object.
                         STATE.players = players
-
-                        initialize_state()
-
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
                         validate_state()  # Check for nospec, self spec, afk, and any other problems.
