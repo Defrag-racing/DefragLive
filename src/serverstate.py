@@ -206,11 +206,13 @@ def start():
 
                     if bool(server_info):  # New data is not empty and valid. Update the state object.
                         STATE.players = players
+
+                        first_player = STATE.get_first_player()
+                        STATE.current_player = STATE.get_player_by_id(first_player)
+                        STATE.current_player_id = first_player
+
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
-                        # first_player = STATE.get_first_player()
-                        # STATE.current_player = STATE.get_player_by_id(first_player)
-                        # STATE.current_player_id = first_player
                         validate_state()  # Check for nospec, self spec, afk, and any other problems.
                         curr_state_hash = md5(f'{curr_state}_{num_players}_{str([pl.__dict__ for pl in STATE.players])}'.encode('utf-8')).digest()
                         if STATE.current_player is not None and STATE.current_player_id != STATE.bot_id:
