@@ -207,9 +207,7 @@ def start():
                     if bool(server_info):  # New data is not empty and valid. Update the state object.
                         STATE.players = players
 
-                        first_player = STATE.get_first_player()
-                        STATE.current_player = STATE.get_player_by_id(first_player)
-                        STATE.current_player_id = first_player
+                        initialize_state()
 
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
