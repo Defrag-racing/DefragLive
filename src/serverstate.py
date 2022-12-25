@@ -214,6 +214,7 @@ def start():
                     STATE.handle_vote()
         except Exception as e:
             if e.args[0] == 'Paused':
+                logging.info("State paused.")
                 pass
             else:
                 prev_state, prev_state_hash, curr_state = None, None, None
@@ -509,6 +510,8 @@ def get_svinfo_report(filename):
     Handles parsed data of the server info report. Turns the parsed data into coherent objects.
     """
     global STATE
+
+    logging.info(f"Reading svinfo report from {filename}...")
 
     with open(filename, "r") as svinfo_report_f:
         num_players = 0
