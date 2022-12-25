@@ -523,8 +523,6 @@ def get_svinfo_report(filename):
     """
     global STATE
 
-    logging.info(f"Reading svinfo report from {filename}...")
-
     with open(filename, "r") as svinfo_report_f:
         num_players = 0
         lines = svinfo_report_f.readlines()
