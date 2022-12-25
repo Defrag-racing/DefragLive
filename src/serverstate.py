@@ -92,8 +92,12 @@ class State:
         return id_player
 
     def get_first_player(self):
-        """Helper function for easily retrieving the first player object"""
-        return self.spec_ids[0] if len(self.spec_ids) > 0 else None
+        """Helper function for easily retrieving the first player object that is not a bot"""
+        for spec_id in self.spec_ids:
+            if spec_id != self.bot_id:
+                return spec_id
+
+        return None
 
     def get_inputs(self):
         """Helper functions for easily retrieving the latest inputs recorded from the watched player."""
@@ -204,9 +208,9 @@ def start():
                         STATE.players = players
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
-                        first_player = STATE.get_first_player()
-                        STATE.current_player = STATE.get_player_by_id(first_player)
-                        STATE.current_player_id = first_player
+                        # first_player = STATE.get_first_player()
+                        # STATE.current_player = STATE.get_player_by_id(first_player)
+                        # STATE.current_player_id = first_player
                         validate_state()  # Check for nospec, self spec, afk, and any other problems.
                         curr_state_hash = md5(f'{curr_state}_{num_players}_{str([pl.__dict__ for pl in STATE.players])}'.encode('utf-8')).digest()
                         if STATE.current_player is not None and STATE.current_player_id != STATE.bot_id:
@@ -335,6 +339,7 @@ def validate_state():
                     print("state.spec_ids: " + str(json.dumps(STATE.spec_ids)))
                     print("state.current_player_id: " + str(STATE.current_player_id))
                     print("state.bot_id: " + str(STATE.bot_id))
+                    print("follow_id: " + str(follow_id))
 
                     logging.info('Nospec detected. Switching...')
                     api.display_message("^7Nospec detected. Switching to the next player.")
