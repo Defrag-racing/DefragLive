@@ -136,3 +136,5 @@ src/test.py
 idea.txt
 lists/blacklist*
 lists/whitelist*
+
+test.py
