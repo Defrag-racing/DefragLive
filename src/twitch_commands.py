@@ -23,6 +23,12 @@ USE_WHITELIST = 0
 
 async def connect(ctx, author, args):
     ip = args[0]
+    if not servers.is_valid_ip(ip):
+        msg = f"Server \"{ip}\" is not whitelisted. Refusing connection."
+        api.exec_command(f"cg_centertime 5;displaymessage 140 8 ^3{author} ^1{msg};")
+        logging.info(msg)
+        await ctx.channel.send(msg)
+        return
     serverstate.connect(ip, author)
 
 

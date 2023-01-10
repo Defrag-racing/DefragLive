@@ -1,6 +1,16 @@
 import requests
 from bs4 import BeautifulSoup
 
+def is_valid_ip(ip):
+    servers_data = scrape_servers_data()
+
+    servers_data = servers_data['active']
+
+    if ip in servers_data:
+        return True
+
+    return False
+
 def scrape_servers_data():
     """ Obtains data from q3df.org/servers using web scraping"""
     url = f'https://servers.defrag.racing/'
