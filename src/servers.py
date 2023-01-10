@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 def scrape_servers_data():
     """ Obtains data from q3df.org/servers using web scraping"""
-    url = f'https://servers.defrag.racing/'
+    url = f'https://servers.q3df.run/'
     data = requests.get(url, verify=False).json()
     return data
 
