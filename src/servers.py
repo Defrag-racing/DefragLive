@@ -3,8 +3,11 @@ from bs4 import BeautifulSoup
 
 def scrape_servers_data():
     """ Obtains data from q3df.org/servers using web scraping"""
-    url = f'https://servers.q3df.run/'
+    url = f'https://servers.defrag.racing/'
     data = requests.get(url, verify=False).json()
+
+    print(data)
+
     return data
 
 def get_most_popular_server():
