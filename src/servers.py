@@ -61,7 +61,6 @@ def get_active_players(data):
 
 def get_next_active_server(ignore_list):
     """Returns the next active server omitting the servers given in ignore_list"""
-    from config import get_list
     servers_data = scrape_servers_data()
 
     # print(str(servers_data))

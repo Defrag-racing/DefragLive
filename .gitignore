@@ -138,3 +138,5 @@ lists/blacklist*
 lists/whitelist*
 
 test.py
+
+src/test.py
