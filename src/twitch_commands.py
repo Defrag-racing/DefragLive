@@ -202,7 +202,7 @@ async def brightness(ctx, author, args):
     if value.isdigit() and (0 < int(value) <= 5):
         logging.info("vid_restarting...")
         serverstate.VID_RESTARTING = True
-        serverstate.PAUSE_STATE = True
+        # serverstate.PAUSE_STATE = True
         api.exec_command(f"r_mapoverbrightbits {value};vid_restart")
         MapData.save(serverstate.STATE.mapname, 'brightness', value)
     else:
