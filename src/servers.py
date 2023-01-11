@@ -16,7 +16,7 @@ def scrape_servers_data():
     url = f'https://servers.defrag.racing/'
     data = requests.get(url, verify=False).json()
 
-    print(data)
+    # print(data)
 
     return data
 
@@ -93,5 +93,7 @@ def get_next_active_server(ignore_list):
         if player_qty > max_plyr_qty and ip_addr not in ignore_list:
             max_plyr_qty = player_qty
             max_plyr_ip = ip_addr
+
+    print("Next active server: " + max_plyr_ip + " (" + str(max_plyr_qty) + " players")
 
     return max_plyr_ip
