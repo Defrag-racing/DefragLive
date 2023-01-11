@@ -283,8 +283,12 @@ def initialize_state():
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
 
-        print('HERE')
-        print('NoSpec Ids: ' + str(STATE.nospec_ids))
+        time.sleep(3)
+        for nospecid in STATE.nospec_ids:
+            api.exec_command('tell ' + str(nospecid) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to fully enjoy your gameplay.')
+            time.sleep(1)
+            api.exec_command('tell ' + str(nospecid) + ' If you would like to turn off "nospec" feature off please write this command /color1 spec')
+            time.sleep(1)
     except:
         return False
 
