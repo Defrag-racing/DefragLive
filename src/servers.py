@@ -4,12 +4,22 @@ from bs4 import BeautifulSoup
 def is_valid_ip(ip):
     servers_data = scrape_servers_data()
 
-    servers_data = servers_data['active']
+    if ip in servers_data['empty']:
+        return {
+            'status': False,
+            'message': 'The server (' + ip + ') is empty. Try again later, or try to connect to a different server.' 
+        }
 
-    if ip in servers_data:
-        return True
 
-    return False
+    if ip in servers_data['active']:
+        return {
+            'status': True
+        }
+
+    return {
+        'status': False,
+        'message': 'The server (' + ip + ') is not in the whitelist.' 
+    }
 
 def scrape_servers_data():
     """ Obtains data from q3df.org/servers using web scraping"""
