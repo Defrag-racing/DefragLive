@@ -282,6 +282,9 @@ def initialize_state():
         STATE.num_players = num_players
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
+
+        print('HERE')
+        print(serverstate.nospec_ids)
     except:
         return False
 
