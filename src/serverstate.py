@@ -201,7 +201,7 @@ def start():
                     api.exec_command("varmath color2 = $chsinfo(152);"  # Store inputs in color2
                                            "silent svinfo_report serverstate.txt", verbose=False)  # Write a new report
                 elif not VID_RESTARTING:
-                    raise Exception("Paused")
+                    raise Exception("VidPaused")
 
                 if new_report_exists(config.STATE_REPORT_P):
                     # Given that a new report exists, read this new data.
@@ -227,6 +227,8 @@ def start():
             if e.args[0] == 'Paused':
                 logging.info("State paused.")
                 pass
+            elif e.args[0] == 'VidPaused':
+                logging.info("Vid paused.")
             else:
                 prev_state, prev_state_hash, curr_state = None, None, None
                 initialize_state()  # Handle the first state fetch. Some extra processing needs to be done this time.
