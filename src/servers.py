@@ -62,6 +62,9 @@ def get_active_players(data):
     speccable_players = []
     active_players = []
     if data['scores']['num_players']:
+        if 'notice' in data:
+            return data['scores']['players']
+
         for plyr_num in data['players']:
             player = data['players'][plyr_num]
             if not player['nospec']:
@@ -74,15 +77,9 @@ def get_active_players(data):
 
 def get_next_active_server(ignore_list):
     """Returns the next active server omitting the servers given in ignore_list"""
-    print("NextActiveServer: Bfore scrape")
     servers_data = scrape_servers_data()
 
-    print("NextActiveServer: After scrape")
-
-    # print(str(servers_data))
-
     servers_data = servers_data['active']
-    print("NextActiveServer: After ACTIVE")
 
     for ignore_ip in ignore_list:
         if ':' not in ignore_ip:
@@ -90,7 +87,6 @@ def get_next_active_server(ignore_list):
 
     max_plyr_qty = 0
     max_plyr_ip = ""
-    print("NextActiveServer: After max")
 
     for ip_addr, data in servers_data.items():
         active_players = get_active_players(data)
