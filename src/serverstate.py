@@ -362,8 +362,9 @@ def validate_state():
                 # There's been no one on the server for a while or only afks. Switch servers.
 
                 # Ignore this ip until a good server is found
-                IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS else None
+                IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS and STATE.ip != "" else None
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
+                print("new_ip: " + str(new_ip))
                 if bool(new_ip):
                     connect(new_ip)
                     return
