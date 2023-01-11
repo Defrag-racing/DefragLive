@@ -205,9 +205,11 @@ def process_line(line):
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()
 
-            for player in serverstate.players:
-                api.exec_command('tell ' + str(player.id) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to fully enjoy your gameplay.')
-                api.exec_command('tell ' + str(player.id) + ' If you would like to turn off "nospec" feature off please write this command /color1 spec')
+            # for player in serverstate.players:
+            #     api.exec_command('tell ' + str(player.id) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to fully enjoy your gameplay.')
+            #     api.exec_command('tell ' + str(player.id) + ' If you would like to turn off "nospec" feature off please write this command /color1 spec')
+
+            print(serverstate.get_nospec_players())
 
         # sc_r = r"^\^5serverCommand:\s*(\d+?)\s*:\s*(.+?)$"
         # match = re.match(sc_r, line)
