@@ -284,7 +284,7 @@ def initialize_state():
         logging.info("State Initialized.")
 
         print('HERE')
-        print(serverstate.nospec_ids)
+        print('NoSpec Ids: ' + str(STATE.nospec_ids))
     except:
         return False
 
