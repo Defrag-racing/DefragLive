@@ -30,6 +30,9 @@ async def connect(ctx, author, args):
         logging.info(msg)
         await ctx.channel.send(msg)
         return
+
+    api.exec_command("say It's been a pleasure, but it seems the audience chose to switch servers. Thank you for the enjoyable experience, farewell.")
+
     serverstate.connect(ip, author)
 
 

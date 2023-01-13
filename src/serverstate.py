@@ -355,6 +355,9 @@ def validate_state():
 
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
+
+            api.exec_command("say It appears that the player has been inactive for over a minute, so I will be moving on to the next available player.")
+
             STATE.idle_counter = 0  # Reset idle counter
 
         else:  # Only found ourselves to spec.
@@ -374,6 +377,9 @@ def validate_state():
                 IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS and STATE.ip != "" else None
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
+
+                api.exec_command("say It's been fun, but the activity has decreased and audience interest is waning. Thank you for your time and farewell.")
+
                 if bool(new_ip):
                     connect(new_ip)
                     return
