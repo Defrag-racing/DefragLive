@@ -192,8 +192,7 @@ def process_line(line):
 
 
         if line.startswith('Com_TouchMemory: 0 msec'):
-            print('HEEEEEEEEEEEERE')
-            api.exec_command('say HEEEEEEEEEEEERE')
+            serverstate.PAUSE_STATE = False
 
         if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
