@@ -356,7 +356,8 @@ def validate_state():
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
 
-            api.exec_command("say It appears that the player has been inactive for over a minute, so I will be moving on to the next available player.")
+            if spectating_afk:
+                api.exec_command("say It appears that the player has been inactive for over a minute, so I will be moving on to the next available player.")
 
             STATE.idle_counter = 0  # Reset idle counter
 
