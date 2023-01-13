@@ -382,6 +382,8 @@ def validate_state():
                     STANDBY_START_T = time.time()
                     msg_switch_t = 15  # time in seconds to switch between the two standby messages
                     while IGNORE_IPS != [] and (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
+                        api.exec_command("team s")
+
                         api.exec_command("say ^3No active servers. On standby mode.")
                         #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
                         time.sleep(msg_switch_t)
