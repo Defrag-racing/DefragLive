@@ -323,7 +323,7 @@ def standby_mode_finished():
 
     new_server = servers.get_next_active_server(IGNORE_IPS)
 
-    if new_server is None:
+    if new_server is None or new_server == "":
         logging.info("[Note] No Active servers found. Going back to standby mode.")
         standby_mode_started()
         return
