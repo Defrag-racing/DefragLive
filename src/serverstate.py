@@ -29,7 +29,7 @@ MESSAGE_REPEATS = 1  # How many times to spam info messages. 0 for no messages.
 AFK_TIMEOUT = 10 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
 IDLE_TIMEOUT = 999999 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
-STANDBY_TIME = 15  # Amount of time to standby in minutes
+STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
 VOTE_TALLY_TIME = 5  # Amount of time to wait while tallying votes
 
 
@@ -398,6 +398,8 @@ def validate_state():
                         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
                         time.sleep(msg_switch_t)
                     IGNORE_IPS = []  # continue after standby time elapsed or viewer has performed an action
+
+                    validate_state()
         STATE.current_player_id = follow_id  # Spectating someone.
         STATE.current_player = STATE.get_player_by_id(follow_id)
 
