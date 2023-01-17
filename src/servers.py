@@ -85,7 +85,7 @@ def get_active_players(data):
     return active_players
 
 
-def get_next_active_server(ignore_list):
+def get_next_active_server(ignore_list, ignore_empty=False):
     """Returns the next active server omitting the servers given in ignore_list"""
     servers_data = scrape_servers_data()
 
@@ -106,5 +106,8 @@ def get_next_active_server(ignore_list):
             max_plyr_ip = ip_addr
 
     print("Next active server: " + max_plyr_ip + " (" + str(max_plyr_qty) + " players")
+
+    if max_plyr_qty == 0 and ignore_empty:
+        return None
 
     return max_plyr_ip
