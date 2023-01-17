@@ -171,7 +171,8 @@ class Player:
         self.id = id
         for key in player_data:
             setattr(self, key, player_data[key])
-        self.nospec = self.c1 == 'nospec'
+        self.nospec = self.c1 == 'nospec' or self.c1 == 'nospecpm'
+        self.nopm = self.c1 == 'nospecpm'
 
 
 def start():
@@ -285,9 +286,14 @@ def initialize_state():
 
         time.sleep(3)
         for nospecid in STATE.nospec_ids:
-            api.exec_command('tell ' + str(nospecid) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to enjoy your gameplay.')
+            if nospecid in STATE.nopmids:
+                continue
+
+            api.exec_command('tell ' + str(nospecid) + ' Hey, "nospec" is detected, it may be by mistake and because of it your Twitch fans can\'t spectate you.')
             time.sleep(1)
-            api.exec_command('tell ' + str(nospecid) + ' If you would like to turn off "nospec" feature off please write this command /color1 spec')
+            api.exec_command('tell ' + str(nospecid) + ' If you would like to turn "nospec" feature off please write this command /color1 spec')
+            time.sleep(1)
+            api.exec_command('tell ' + str(nospecid) + ' If everything is ok, please set /color1 nospecpm and you won\'t receive private notification.')
             time.sleep(1)
     except:
         return False
@@ -576,7 +582,7 @@ def get_svinfo_report(filename):
         else:
             time.sleep(5)
             return None, None, None
-        players, spec_ids, nospec_ids = [], [], []
+        players, spec_ids, nospec_ids, nopmids = [], [], [], []
 
     for header in info:
         try:
@@ -587,15 +593,20 @@ def get_svinfo_report(filename):
             players.append(Player(cli_id, player_data))
             num_players += 1
             if player_data['t'] != '3':  # Filter out spectators out of followable ids.
-                if player_data['c1'] != 'nospec':  # Filter out nospec'd players out of followable ids
+                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':  # Filter out nospec'd players out of followable ids
                     spec_ids.append(cli_id)
                 else:
                     nospec_ids.append(cli_id)
+
+                if player_data['c1'] == 'nospecpm':
+                    nopmids.append(cli_id)
+
         except:
             continue
 
     server_info['spec_ids'] = spec_ids
     server_info['nospec_ids'] = nospec_ids
+    server_info['nopmids'] = nopmids
     return server_info, players, num_players
 
 

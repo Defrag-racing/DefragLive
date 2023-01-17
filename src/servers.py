@@ -105,7 +105,7 @@ def get_next_active_server(ignore_list, ignore_empty=False):
             max_plyr_qty = player_qty
             max_plyr_ip = ip_addr
 
-    print("Next active server: " + max_plyr_ip + " (" + str(max_plyr_qty) + " players")
+    print("Next active server: " + max_plyr_ip + " (" + str(max_plyr_qty) + " players)")
 
     if max_plyr_qty == 0 and ignore_empty:
         return None
