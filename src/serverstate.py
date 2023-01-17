@@ -297,6 +297,39 @@ def initialize_state():
 
     return True
 
+def standby_mode_started():
+    global IGNORE_IPS
+
+    logging.info("[Note] Goin on standby mode.")
+
+    api.exec_command("map st1")
+    STANDBY_START_T = time.time()
+    msg_switch_t = 15  # time in seconds to switch between the two standby messages
+    while IGNORE_IPS != [] and (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
+        api.exec_command("team s")
+
+        api.exec_command("say ^3No active servers. On standby mode.")
+        #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
+        time.sleep(msg_switch_t)
+        api.exec_command("say Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
+        #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
+        time.sleep(msg_switch_t)
+    IGNORE_IPS = []  # continue after standby time elapsed or viewer has performed an action
+
+    standby_mode_finished()
+
+def standby_mode_finished():
+    logging.info("[Note] standby mode finished. Checking for new servers.")
+
+    new_server = servers.get_next_active_server(IGNORE_IPS)
+
+    if new_server is None:
+        logging.info("[Note] No Active servers found. Going back to standby mode.")
+        standby_mode_started()
+        return
+
+    logging.info("[SERVERSTATE] Connecting Now : " + str(new_server))
+    connect(new_server)
 
 def validate_state():
     """
@@ -385,21 +418,8 @@ def validate_state():
                     connect(new_ip)
                     return
                 else:  # No ip left to connect to, go on standby mode.
-                    api.exec_command("map st1")
-                    STANDBY_START_T = time.time()
-                    msg_switch_t = 15  # time in seconds to switch between the two standby messages
-                    while IGNORE_IPS != [] and (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
-                        api.exec_command("team s")
+                    standby_mode_started()
 
-                        api.exec_command("say ^3No active servers. On standby mode.")
-                        #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
-                        time.sleep(msg_switch_t)
-                        api.exec_command("say Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
-                        #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
-                        time.sleep(msg_switch_t)
-                    IGNORE_IPS = []  # continue after standby time elapsed or viewer has performed an action
-
-                    validate_state()
         STATE.current_player_id = follow_id  # Spectating someone.
         STATE.current_player = STATE.get_player_by_id(follow_id)
 
