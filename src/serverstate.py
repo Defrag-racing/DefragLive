@@ -414,7 +414,7 @@ def validate_state():
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
 
-                api.exec_command("say It's been fun, but the activity has decreased and audience interest is waning. Thank you for your time and farewell.")
+                api.exec_command("say It's been pleasure, but AFK has been detected and audience interest is waning. Thank you for your time and farewell.")
 
                 if bool(new_ip):
                     connect(new_ip)
