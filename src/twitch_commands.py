@@ -31,7 +31,7 @@ async def connect(ctx, author, args):
         await ctx.channel.send(msg)
         return
 
-    api.exec_command("say It's been great, but it seems the audience chose to switch servers. Thank you for the enjoyable experience, farewell.")
+    api.exec_command("say ^7Switching servers. ^3Farewell.")
 
     serverstate.connect(ip, author)
 

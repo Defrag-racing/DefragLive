@@ -289,7 +289,7 @@ def initialize_state():
             if nospecid in STATE.nopmids:
                 continue
 
-            api.exec_command('tell ' + str(nospecid) + ' Hey, "nospec" is detected, it may be by mistake and because of it your Twitch fans can\'t spectate you.')
+            api.exec_command('tell ' + str(nospecid) + ' Detected nospec, may be by mistake and because of it your fellow defraggers can\'t watch you.')
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' If you would like to turn "nospec" feature off please write this command /color1 spec')
             time.sleep(1)
@@ -414,7 +414,7 @@ def validate_state():
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
 
-                api.exec_command("say It's been pleasure, but AFK has been detected and audience interest is waning. Thank you for your time and farewell.")
+                api.exec_command("say ^1AFK ^7on all available players has been detected. ^3Farewell.")
 
                 if bool(new_ip):
                     connect(new_ip)
