@@ -19,7 +19,9 @@ import servers
 import logging
 import threading
 import json
+import time
 from hashlib import md5
+import datetime
 # import mapdata
 from websocket_console import notify_serverstate_change
 
@@ -43,6 +45,11 @@ LAST_REPORT_TIME = time.time()
 LAST_INIT_REPORT_TIME = time.time()
 
 # mapdata_thread = threading.Thread(target=mapdata.mapdataHook, daemon=True)
+
+
+# Daily restart variables
+LAST_TIME=""
+RESTART_TIMESTAMP="04:00:00"
 
 
 class State:
@@ -248,6 +255,7 @@ def initialize_state():
     global PAUSE_STATE
     global INIT_TIMEOUT
     global STATE_INITIALIZED
+    global LAST_TIME
 
     try:
         # Create a secret code. Only "secret" for one use.
@@ -256,6 +264,17 @@ def initialize_state():
 
         init_counter = 0
         while server_info is None or bot_player == []:  # Continue running this block until valid data and bot id found
+            timestamp = time.strftime('%H:%M:%S')
+
+            if (timestamp == RESTART_TIMESTAMP):
+                day = datetime.datetime.today().weekday()
+                current_restart_time = day + " " + timestamp
+
+                if LAST_TIME != current_restart_time:
+                    LAST_TIME = current_restart_time
+                    api.exec_command("quit")
+
+
             init_counter += 1
             if not PAUSE_STATE:
                 # Set color1 to secret code to determine bot's client id
