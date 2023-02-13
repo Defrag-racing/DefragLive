@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
         if (timestamp == RESTART_TIMESTAMP):
             day = datetime.today().weekday()
-            current_restart_time = day + " " + timestamp
+            current_restart_time = str(day) + " " + timestamp
 
             if LAST_TIME != current_restart_time:
                 LAST_TIME = current_restart_time
