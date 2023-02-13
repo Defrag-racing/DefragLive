@@ -169,6 +169,7 @@ def handle_ws_command(msg):
         if 'id:' in content['value']:
             id = content['value'].split(':')[1]
             logging.info("[CONSOLE] SPECIFIC ID SPECTATE REQUEST " + str(id))
+            api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3Another player")
             serverstate.spectate_player(id)
             time.sleep(1)
 
