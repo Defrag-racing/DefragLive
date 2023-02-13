@@ -21,6 +21,11 @@ import pathlib
 import twitch_commands
 import filters
 
+
+# Daily restart variables
+LAST_TIME=""
+RESTART_TIMESTAMP="04:00:00"
+
 df_channel = environ['CHANNEL'] if 'CHANNEL' in environ and environ['CHANNEL'] != "" else input("Your twitch channel name: ")
 
 # To add any sound command, add the command name to the list of commands
@@ -245,6 +250,15 @@ if __name__ == "__main__":
     bot_thread.start()
 
     while True:
+        timestamp = time.strftime('%H:%M:%S')
+
+        if (timestamp == RESTART_TIMESTAMP):
+            day = datetime.datetime.today().weekday()
+            current_restart_time = day + " " + timestamp
+
+            if LAST_TIME != current_restart_time:
+                LAST_TIME = current_restart_time
+                api.exec_command("quit")
         try:
             api.api_init()
             time.sleep(5)
