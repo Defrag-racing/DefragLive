@@ -251,6 +251,7 @@ if __name__ == "__main__":
 
     while True:
         timestamp = time.strftime('%H:%M:%S')
+        print("CURRENT TIME: " + timestamp + "")
 
         if (timestamp == RESTART_TIMESTAMP):
             day = datetime.datetime.today().weekday()
