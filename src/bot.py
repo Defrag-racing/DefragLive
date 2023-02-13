@@ -254,7 +254,7 @@ if __name__ == "__main__":
         print("CURRENT TIME: " + timestamp + "")
 
         if (timestamp == RESTART_TIMESTAMP):
-            day = datetime.datetime.today().weekday()
+            day = datetime.today().weekday()
             current_restart_time = day + " " + timestamp
 
             if LAST_TIME != current_restart_time:
