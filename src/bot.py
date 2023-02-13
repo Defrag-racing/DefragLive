@@ -24,7 +24,7 @@ import filters
 
 # Daily restart variables
 LAST_TIME=""
-RESTART_TIMESTAMP="04:00:00"
+RESTART_TIMESTAMP="04"
 
 df_channel = environ['CHANNEL'] if 'CHANNEL' in environ and environ['CHANNEL'] != "" else input("Your twitch channel name: ")
 
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     bot_thread.start()
 
     while True:
-        timestamp = time.strftime('%H:%M:%S')
+        timestamp = time.strftime('%H')
         print("CURRENT TIME: " + timestamp + "")
 
         if (timestamp == RESTART_TIMESTAMP):
