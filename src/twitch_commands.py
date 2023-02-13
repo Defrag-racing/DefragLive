@@ -7,6 +7,7 @@ import servers
 import time
 import console
 import serverstate
+import requests
 from env import environ
 import threading
 import asyncio
