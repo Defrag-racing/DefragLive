@@ -313,7 +313,7 @@ def standby_mode_started():
 
     STANDBY_START_T = time.time()
     ignore_finish_standbymode = False
-    msg_switch_t = 15  # time in seconds to switch between the two standby messages
+    msg_switch_t = 10  # time in seconds to switch between the two standby messages
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         if RECONNECTED_CHECK:
             ignore_finish_standbymode = True
