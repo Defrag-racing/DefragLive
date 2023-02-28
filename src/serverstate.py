@@ -313,14 +313,14 @@ def standby_mode_started():
 
     STANDBY_START_T = time.time()
     ignore_finish_standbymode = False
-    msg_switch_t = 10  # time in seconds to switch between the two standby messages
+    msg_switch_t = 3  # time in seconds to switch between the two standby messages
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         if RECONNECTED_CHECK:
             ignore_finish_standbymode = True
             RECONNECTED_CHECK = False
             break
 
-        api.exec_command("team s")
+        api.exec_command("team p")
 
         api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3No active servers. On standby mode.")
         #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
