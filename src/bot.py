@@ -41,7 +41,6 @@ SOUND_CMDS = [
 # also add the function of the command inside twitch_commands.py (command function must be named as the first entry of your command)
 TWITCH_CMDS = [
     ["restart"],
-    ["reconnect"],
     ["triggers"],
     ["clips"],
     ["clear"],
