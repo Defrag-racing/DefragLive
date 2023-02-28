@@ -312,9 +312,11 @@ def standby_mode_started():
     logging.info("[Note] Goin on standby mode.")
 
     STANDBY_START_T = time.time()
+    ignore_finish_standbymode = False
     msg_switch_t = 15  # time in seconds to switch between the two standby messages
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         if RECONNECTED_CHECK:
+            ignore_finish_standbymode = True
             RECONNECTED_CHECK = False
             break
 
@@ -327,7 +329,8 @@ def standby_mode_started():
         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
         time.sleep(msg_switch_t)
 
-    standby_mode_finished()
+    if not ignore_finish_standbymode:
+        standby_mode_finished()
 
 def standby_mode_finished():
     global IGNORE_IPS
