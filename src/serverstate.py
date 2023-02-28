@@ -314,10 +314,10 @@ def standby_mode_started():
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         api.exec_command("team s")
 
-        api.exec_command("say ^3No active servers. On standby mode.")
+        api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3No active servers. On standby mode.")
         #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
         time.sleep(msg_switch_t)
-        api.exec_command("say Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
+        api.exec_command(f"cg_centertime 2;displaymessage 140 10 Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
         time.sleep(msg_switch_t)
 
