@@ -34,16 +34,20 @@ async def connect(ctx, author, args):
 
     api.exec_command("say ^7Switching servers. ^3Farewell.")
 
+    serverstate.RECONNECTED_CHECK = True
+
     serverstate.connect(ip, author)
 
 
 async def restart(ctx, author, args):
     serverstate.IGNORE_IPS = []
     connect_ip = servers.get_most_popular_server()
+    serverstate.RECONNECTED_CHECK = True
     serverstate.connect(connect_ip)
 
 
 async def reconnect(ctx, author, args):
+    serverstate.RECONNECTED_CHECK = True
     api.exec_command(f"reconnect")
 
 
