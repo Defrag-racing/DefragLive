@@ -34,6 +34,7 @@ INIT_TIMEOUT = 10  # Determines how many times to try the state initialization b
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
 VOTE_TALLY_TIME = 5  # Amount of time to wait while tallying votes
 
+RECONNECTED_CHECK = False
 
 STATE = None
 PAUSE_STATE = False
@@ -307,11 +308,16 @@ def initialize_state():
     return True
 
 def standby_mode_started():
+    global RECONNECTED_CHECK
     logging.info("[Note] Goin on standby mode.")
 
     STANDBY_START_T = time.time()
     msg_switch_t = 15  # time in seconds to switch between the two standby messages
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
+        if RECONNECTED_CHECK:
+            RECONNECTED_CHECK = False
+            break
+
         api.exec_command("team s")
 
         api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3No active servers. On standby mode.")
@@ -324,6 +330,10 @@ def standby_mode_started():
     standby_mode_finished()
 
 def standby_mode_finished():
+    global IGNORE_IPS
+
+    IGNORE_IPS = []
+
     logging.info("[Note] standby mode finished. Checking for new servers.")
 
     new_server = servers.get_next_active_server(IGNORE_IPS)
@@ -347,6 +357,7 @@ def validate_state():
     global STATE
     global PAUSE_STATE
     global IGNORE_IPS
+    global RECONNECTED_CHECK
 
     if STATE.get_player_by_id(STATE.bot_id) is None:
         spectating_self = False
@@ -425,6 +436,7 @@ def validate_state():
                 else:  # No ip left to connect to, go on standby mode.
                     api.exec_command("map st1")
                     IGNORE_IPS = []
+                    RECONNECTED_CHECK = False
                     standby_mode_started()
 
         STATE.current_player_id = follow_id  # Spectating someone.
@@ -467,6 +479,8 @@ def connect(ip, caller=None):
     if caller is not None:
         STATE.connect_msg = f"^7Brought by ^3{caller}"
         IGNORE_IPS = []
+
+    RECONNECTED_CHECK = True
 
     api.exec_command("connect " + ip, verbose=False)
 
