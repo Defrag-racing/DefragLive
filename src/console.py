@@ -30,6 +30,7 @@ ERROR_FILTERS = {
     "ERROR: Unhandled exception caught": "RECONNECT",
     "Signal caught (11)": "RECONNECT",
     "Incorrect challenge, please reconnect": "RECONNECT"
+    "Exception Address: 000000016500b28c (VMA)"
     #"ERROR: CM_LoadMap:": "DIFFERENT_IP"
 }
 
