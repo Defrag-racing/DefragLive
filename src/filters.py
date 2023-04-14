@@ -58,7 +58,7 @@ def strip_repeated_characters(value):
 
 def clean_string(value):
     pass1 = strip_q3_colors(value)
-    pass2 = re.sub(r'[^a-zA-Z0-9!\| ]', '', pass1)
+    pass2 = re.sub(r'[^a-zA-Z0-9!\|: ]', '', pass1)
     # pass3 = strip_spaces_after_every_letter(pass2)
     pass4 = strip_repeated_characters(pass2)
     return pass4
@@ -182,6 +182,9 @@ def filter_message(msg, separator=' ^7> '):
 
 
 def filter_author(author, replace_with='^7UnnamedPlayer'):
+    author = filter_capital_letters_in_message(author)
+    author = filter_numbers_in_message(author)
+
     author_stripped = clean_string(author)
     author_lower = author_stripped.lower()
     author_stripped_array = replace_special_chars(author_lower)
