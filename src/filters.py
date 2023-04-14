@@ -17,7 +17,7 @@ SPECIAL_NUMBERS = {
     '5': ['s'],
     '6': ['g', 'b'],
     '7': ['t'],
-    '8': ['b'],
+    '8': ['b', 'g'],
     '9': ['g'],
     'l': ['i'],
     '!': ['i', 'l'],
@@ -117,7 +117,7 @@ def replace_special_chars(msg):
 def filter_numbers_in_message(msg):
     parts = msg.split(' ')
 
-    for part in parts:
+    for idx, part in enumerate(parts):
         msg_stripped = re.sub(r'[^a-zA-Z ]', '', part)
         msg_lower = msg_stripped.lower()
 
@@ -125,15 +125,15 @@ def filter_numbers_in_message(msg):
 
         for word in blacklisted_words:
             if word in msg_lower:
-                part = part.replace(word, '*'*len(word))
+                part = msg_lower.replace(word, '*'*len(word))
+                parts[idx] = part
 
     return ' '.join(parts)
 
 def filter_capital_letters_in_message(msg):
     parts = msg.split(' ')
 
-    for part in parts:
-        # remove all non-capital letters and numbers
+    for idx, part in enumerate(parts):
         msg_stripped = re.sub(r'[^A-Z ]', '', part)
         msg_lower = msg_stripped.lower()
 
@@ -141,7 +141,8 @@ def filter_capital_letters_in_message(msg):
 
         for word in blacklisted_words:
             if word in msg_lower:
-                part = part.replace(word, '*'*len(word))
+                part = msg_lower.replace(word, '*'*len(word))
+                parts[idx] = part
 
     return ' '.join(parts)
 
