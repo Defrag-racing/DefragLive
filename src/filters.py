@@ -104,7 +104,12 @@ def filter_line_data(data):
 
     if len(chat_automaton) > 0:
         if 'content' in data and data['content'] is not None:
-            data['content'] = filter_message(data['content'])
+            filtered_m = filter_message(data['content'])
+
+            for i in range(1, 5):
+                filtered_m = filter_message(filtered_m)
+
+            data['content'] = filtered_m
 
     return data
 
@@ -118,7 +123,7 @@ def filter_numbers_in_message(msg):
     parts = msg.split(' ')
 
     for idx, part in enumerate(parts):
-        msg_stripped = re.sub(r'[^a-zA-Z ]', '', part)
+        msg_stripped = re.sub(r'(?<!\^)\d+|(?<=\^)\d{2,}', '', part)
         msg_lower = msg_stripped.lower()
 
         blacklisted_words = get_list("blacklist_chat")
@@ -145,6 +150,7 @@ def filter_capital_letters_in_message(msg):
                 parts[idx] = part
 
     return ' '.join(parts)
+
 
 def filter_message(msg, separator=' ^7> '):
     msg = filter_capital_letters_in_message(msg)
