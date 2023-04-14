@@ -114,8 +114,41 @@ def replace_special_chars(msg):
     all_items = [SPECIAL_NUMBERS.get(char, [char]) for char in msg]
     return [''.join(elem) for elem in itertools.product(*all_items)]
 
+def filter_numbers_in_message(msg):
+    parts = msg.split(' ')
+
+    for part in parts:
+        msg_stripped = re.sub(r'[^a-zA-Z ]', '', part)
+        msg_lower = msg_stripped.lower()
+
+        blacklisted_words = get_list("blacklist_chat")
+
+        for word in blacklisted_words:
+            if word in msg_lower:
+                part = part.replace(word, '*'*len(word))
+
+    return ' '.join(parts)
+
+def filter_capital_letters_in_message(msg):
+    parts = msg.split(' ')
+
+    for part in parts:
+        # remove all non-capital letters and numbers
+        msg_stripped = re.sub(r'[^A-Z ]', '', part)
+        msg_lower = msg_stripped.lower()
+
+        blacklisted_words = get_list("blacklist_chat")
+
+        for word in blacklisted_words:
+            if word in msg_lower:
+                part = part.replace(word, '*'*len(word))
+
+    return ' '.join(parts)
 
 def filter_message(msg, separator=' ^7> '):
+    msg = filter_capital_letters_in_message(msg)
+    msg = filter_numbers_in_message(msg)
+
     prefix = ''
     if separator in msg:
         tokens = msg.split(separator, 1)
