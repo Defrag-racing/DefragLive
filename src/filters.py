@@ -187,7 +187,7 @@ def filter_message(msg, separator=' ^7> '):
     return '{}{}'.format(prefix, msg)
 
 
-def filter_author(author, replace_with='^7UnnamedPlayer'):
+def filter_author(author, replace_with='UnnamedPlayer'):
     author = filter_capital_letters_in_message(author)
     author = filter_numbers_in_message(author)
 
