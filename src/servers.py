@@ -18,7 +18,7 @@ def is_valid_ip(ip):
 
     return {
         'status': False,
-        'message': 'The server (' + ip + ') is not in the whitelist.' 
+        'message': 'The server (' + ip + ') is not whitelisted OR has not yet been registered as active.' 
     }
 
 def scrape_servers_data():
