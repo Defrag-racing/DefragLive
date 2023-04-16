@@ -197,6 +197,7 @@ def process_line(line):
 
         if line.startswith('Com_TouchMemory:'):
             serverstate.PAUSE_STATE = False
+            api.exec_command("team s")
 
         if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
