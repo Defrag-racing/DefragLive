@@ -1,5 +1,10 @@
 import requests
+import urllib3
 from bs4 import BeautifulSoup
+
+urllib3.disable_warnings()
+
+LAST_SERVERS_DATA = None
 
 def is_valid_ip(ip):
     servers_data = scrape_servers_data()
@@ -22,11 +27,18 @@ def is_valid_ip(ip):
     }
 
 def scrape_servers_data():
-    """ Obtains data from q3df.org/servers using web scraping"""
-    url = f'https://servers.defrag.racing/'
-    data = requests.get(url, verify=False).json()
+    global LAST_SERVERS_DATA
 
-    # print(data)
+    try:
+        url = f'https://servers.defrag.racing/'
+        data = requests.get(url, verify=False).json()
+    except:
+        return LAST_SERVERS_DATA or {
+            "active": {},
+            "empty": {}
+        }
+
+    LAST_SERVERS_DATA = data
 
     return data
 
