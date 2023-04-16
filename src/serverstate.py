@@ -240,7 +240,7 @@ def start():
             time.sleep(1)
 
 
-def initialize_state():
+def initialize_state(force=False):
     """
     Handles necessary processing on the first iteration of state retrieval.
     Important steps done here:
@@ -259,7 +259,8 @@ def initialize_state():
         server_info, bot_player, timeout_flag = None, [], 0
 
         init_counter = 0
-        while server_info is None or bot_player == []:  # Continue running this block until valid data and bot id found
+        while server_info is None or bot_player == [] or force == True:  # Continue running this block until valid data and bot id found
+            force = False
             init_counter += 1
             if not PAUSE_STATE:
                 # Set color1 to secret code to determine bot's client id
