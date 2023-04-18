@@ -24,6 +24,7 @@ from hashlib import md5
 import datetime
 # import mapdata
 from websocket_console import notify_serverstate_change
+import traceback
 
 
 # Configurable variables, Strike = 2seconds
@@ -236,6 +237,8 @@ def start():
             else:
                 prev_state, prev_state_hash, curr_state = None, None, None
                 initialize_state()  # Handle the first state fetch. Some extra processing needs to be done this time.
+                logging.info(f"State failed: {e}")
+                print(traceback.format_exc())
                 logging.info(f"State failed: {e}")
             time.sleep(1)
 
