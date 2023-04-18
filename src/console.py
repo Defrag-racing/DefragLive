@@ -28,8 +28,9 @@ STOP_CONSOLE = False
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
     "ERROR: Unhandled exception caught": "RECONNECT",
-    "Signal caught (11)": "DIFFERENT_IP",
+    "Signal caught (11)": "RECONNECT",
     "Incorrect challenge, please reconnect": "RECONNECT",
+    "Exception Address: 00000005ab99b28c (VMA)": "RECONNECT",
     "Exception Address: 000000016500b28c (VMA)": "RECONNECT",
     "ERROR: CL_ParseServerMessage: read past end of server message": "RECONNECT",
     "^0^7D^6e^7Frag^6.^7TV^0/^7 was kicked": "RECONNECT"
