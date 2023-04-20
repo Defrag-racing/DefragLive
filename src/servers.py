@@ -88,7 +88,12 @@ def get_active_players(data):
             return data['scores']['players']
 
         for plyr_num in data['players']:
-            print("plyr_num", plyr_num)
+            
+            if isinstance(plyr_num, dict):
+                speccable_players.append(int(player['clientId']))
+                active_players.append(int(player['clientId']))
+                continue
+
             player = data['players'][plyr_num]
             if not player['nospec']:
                 speccable_players.append(int(player['clientId']))
