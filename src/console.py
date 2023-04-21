@@ -30,9 +30,7 @@ ERROR_FILTERS = {
     "ERROR: Unhandled exception caught": "RECONNECT",
     "Signal caught (11)": "RECONNECT",
     "Incorrect challenge, please reconnect": "RECONNECT",
-    "Exception Address: 00000005ab99b28c (VMA)": "RECONNECT",
-    "Exception Address: 00000005cb08b28c (VMA)": "RECONNECT",
-    "Exception Address: 000000016500b28c (VMA)": "RECONNECT",
+    "ERROR: Unhandled exception caught": "RECONNECT",
     "ERROR: CL_ParseServerMessage: read past end of server message": "RECONNECT",
     "^0^7D^6e^7Frag^6.^7TV^0/^7 was kicked": "RECONNECT"
     #"ERROR: CM_LoadMap:": "DIFFERENT_IP"
