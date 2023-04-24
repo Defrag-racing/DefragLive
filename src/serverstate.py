@@ -297,12 +297,9 @@ def initialize_state(force=False):
             if nospecid in STATE.nopmids:
                 continue
 
-            api.exec_command('tell ' + str(nospecid) + ' Detected nospec, may be by mistake and because of it your fellow defraggers can\'t watch you.')
+            api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
-            api.exec_command('tell ' + str(nospecid) + ' If you would like to turn "nospec" feature off please write this command /color1 spec')
-            time.sleep(1)
-            api.exec_command('tell ' + str(nospecid) + ' If everything is ok, please set /color1 nospecpm and you won\'t receive private notification.')
-            time.sleep(1)
+            api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
     except:
         return False
 
