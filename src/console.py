@@ -28,6 +28,7 @@ STOP_CONSOLE = False
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
     "ERROR: Unhandled exception caught": "RECONNECT",
+    "Exception Code: ACCESS_VIOLATION": "RECONNECT",
     "Signal caught (11)": "RECONNECT",
     "Incorrect challenge, please reconnect": "RECONNECT",
     "ERROR: Unhandled exception caught": "RECONNECT",
