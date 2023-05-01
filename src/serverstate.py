@@ -188,6 +188,8 @@ def start():
     global PAUSE_STATE
     global VID_RESTARTING
 
+    state_paused_timer = 0
+
     prev_state, prev_state_hash, curr_state = None, None, None
     initialize_state()
     while True:
@@ -196,7 +198,6 @@ def start():
                 raise Exception("Paused")
             elif new_report_exists(config.INITIAL_REPORT_P):
                 initialize_state()
-                
 
             # Only refresh the STATE object if new data has been read and if state is not paused
             while not new_report_exists(config.INITIAL_REPORT_P) and not PAUSE_STATE:
@@ -231,6 +232,13 @@ def start():
         except Exception as e:
             if e.args[0] == 'Paused':
                 logging.info("State paused.")
+                state_paused_timer += 1
+
+                if state_paused_timer > 60:
+                    prev_state, prev_state_hash, curr_state = None, None, None
+                    initialize_state()
+                    state_paused_timer = 0
+                    PAUSE_STATE = False
                 pass
             elif e.args[0] == 'VidPaused':
                 logging.info("Vid paused.")
