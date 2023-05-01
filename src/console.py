@@ -24,6 +24,7 @@ CONSOLE_DISPLAY = []
 FILTERS = ["R_AddMD3Surfaces"]
 WS_Q = queue.Queue()
 STOP_CONSOLE = False
+PREVIOUS_LINE = ''
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -136,6 +137,7 @@ def process_line(line):
     """
 
     global ERROR_FILTERS
+    global PREVIOUS_LINE
 
     line = line.strip()
 
@@ -166,6 +168,8 @@ def process_line(line):
                 logging.info("Game is loading. Pausing state.")
 
         if line in ERROR_FILTERS:
+            logging.info(f"Error detected: {line}")
+            logging.info(f"Previous line: {PREVIOUS_LINE}")
             if ERROR_FILTERS[line] == "RECONNECT":
                 logging.info("Reconnecting to server...")
                 api.exec_command("connect " + serverstate.STATE.ip)
@@ -365,6 +369,7 @@ def process_line(line):
         return line_data
 
     # logging.info(line_data)
+    PREVIOUS_LINE = line_data
     return line_data
 
 
