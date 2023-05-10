@@ -442,7 +442,7 @@ def validate_state():
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
 
-                api.exec_command("say ^1AFK ^7on all available players has been detected. ^3Farewell.")
+                api.exec_command("say ^1AFK/Nospec ^7on all available players has been detected. ^3Farewell.")
 
                 if bool(new_ip):
                     connect(new_ip)
