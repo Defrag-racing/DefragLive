@@ -37,6 +37,8 @@ VOTE_TALLY_TIME = 5  # Amount of time to wait while tallying votes
 
 RECONNECTED_CHECK = False
 
+CURRENT_IP = None
+
 STATE = None
 PAUSE_STATE = False
 IGNORE_IPS = []
@@ -480,6 +482,7 @@ def connect(ip, caller=None):
     global STATE_INITIALIZED
     global CONNECTING
     global IGNORE_IPS
+    global CURRENT_IP
 
     STATE_INITIALIZED = False
     logging.info(f"Connecting to {ip}...")
@@ -493,6 +496,8 @@ def connect(ip, caller=None):
         IGNORE_IPS = []
 
     RECONNECTED_CHECK = True
+
+    CURRENT_IP = ip
 
     api.exec_command("connect " + ip, verbose=False)
 

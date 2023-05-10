@@ -172,10 +172,10 @@ def process_line(line):
             logging.info(f"Previous line: {PREVIOUS_LINE}")
             if ERROR_FILTERS[line] == "RECONNECT":
                 logging.info("Reconnecting to server...")
-                api.exec_command("connect " + serverstate.STATE.ip)
+                api.exec_command("connect " + serverstate.CURRENT_IP)
             elif ERROR_FILTERS[line] == "DIFFERENT_IP":
                 logging.info("Server IP changed. Reconnecting...")
-                api.exec_command("connect " + servers.get_next_active_server([serverstate.STATE.ip]))
+                api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             """ 
