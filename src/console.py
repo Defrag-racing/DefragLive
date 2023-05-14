@@ -25,6 +25,7 @@ FILTERS = ["R_AddMD3Surfaces"]
 WS_Q = queue.Queue()
 STOP_CONSOLE = False
 PREVIOUS_LINE = ''
+LAST_ERROR_TIME = None
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -137,6 +138,7 @@ def process_line(line):
     """
 
     global ERROR_FILTERS
+    global LAST_ERROR_TIME
     global PREVIOUS_LINE
 
     line = line.strip()
@@ -168,16 +170,16 @@ def process_line(line):
                 logging.info("Game is loading. Pausing state.")
 
         if line in ERROR_FILTERS:
-            logging.info(f"Error detected: {line}")
-            logging.info(f"Previous line: {PREVIOUS_LINE}")
-            if ERROR_FILTERS[line] == "RECONNECT":
-                logging.info("Reconnecting to server...")
-                api.exec_command("connect " + serverstate.CURRENT_IP)
-            elif ERROR_FILTERS[line] == "DIFFERENT_IP":
-                logging.info("Server IP changed. Reconnecting...")
-                api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
-
-            time.sleep(4)
+            if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 4:
+                LAST_ERROR_TIME = time.time()
+                logging.info(f"Error detected: {line}")
+                logging.info(f"Previous line: {PREVIOUS_LINE}")
+                if ERROR_FILTERS[line] == "RECONNECT":
+                    logging.info("Reconnecting to server...")
+                    api.exec_command("connect " + serverstate.CURRENT_IP)
+                elif ERROR_FILTERS[line] == "DIFFERENT_IP":
+                    logging.info("Server IP changed. Reconnecting...")
+                    api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             """ 
@@ -201,7 +203,6 @@ def process_line(line):
 
 
         if line.startswith('Com_TouchMemory:'):
-            time.sleep(3) # Wait for 3 seconds
             api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
             serverstate.initialize_state(True)
             serverstate.PAUSE_STATE = False
