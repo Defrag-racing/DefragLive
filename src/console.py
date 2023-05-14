@@ -177,6 +177,8 @@ def process_line(line):
                 logging.info("Server IP changed. Reconnecting...")
                 api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
 
+            time.sleep(4)
+
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             """ 
                 Maybe we can also add a display message with the player name and/or the record 
