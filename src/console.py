@@ -203,6 +203,7 @@ def process_line(line):
 
 
         if line.startswith('Com_TouchMemory:'):
+            time.sleep(3)
             api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
             serverstate.initialize_state(True)
             serverstate.PAUSE_STATE = False
