@@ -83,7 +83,7 @@ def handle_clear(line_data):
 
 
 def handle_discord(line_data):
-   reply_string = "^7Join our discord: ^3https://discord.q3df.run"
+   reply_string = "^7Join our discord: ^3https://discord.defrag.racing"
    api.exec_command(f"say {reply_string}")
    return None
 
