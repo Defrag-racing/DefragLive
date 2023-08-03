@@ -234,14 +234,14 @@ def start():
         except Exception as e:
             if e.args[0] == 'Paused':
                 logging.info("State paused.")
-                state_paused_timer += 1
+                # state_paused_timer += 1
 
-                if state_paused_timer > 60:
-                    prev_state, prev_state_hash, curr_state = None, None, None
-                    initialize_state()
-                    state_paused_timer = 0
-                    PAUSE_STATE = False
-                pass
+                # if state_paused_timer > 60:
+                #     prev_state, prev_state_hash, curr_state = None, None, None
+                #     initialize_state()
+                #     state_paused_timer = 0
+                #     PAUSE_STATE = False
+                # pass
             elif e.args[0] == 'VidPaused':
                 logging.info("Vid paused.")
             else:
