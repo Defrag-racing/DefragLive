@@ -33,7 +33,7 @@ AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x 
 IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
-VOTE_TALLY_TIME = 5  # Amount of time to wait while tallying votes
+VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
 
 RECONNECTED_CHECK = False
 
