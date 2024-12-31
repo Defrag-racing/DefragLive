@@ -12,7 +12,7 @@ def is_valid_ip(ip):
     if ip in servers_data['empty']:
         return {
             'status': False,
-            'message': 'The server (' + ip + ') is empty. Try again later, or try to connect to a different server.' 
+            'message': 'The server (' + ip + ') is empty. Try again later, or try to connect to a different server.'
         }
 
 
@@ -23,7 +23,7 @@ def is_valid_ip(ip):
 
     return {
         'status': False,
-        'message': 'The server (' + ip + ') is not whitelisted OR has not yet been registered as active.' 
+        'message': 'The server (' + ip + ') is not whitelisted OR has not yet been registered as active.'
     }
 
 def scrape_servers_data():

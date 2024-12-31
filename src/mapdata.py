@@ -110,7 +110,7 @@ class MapData(object):
                 save = default
 
         self.save(mapname, key, save)
-        
+
     # remove specific key-value pair from data
     def clear(self, mapname, key):
         con = sqlite3.connect(STORAGE_PATH)

@@ -47,7 +47,7 @@ def get_errors(data):
 def get_data(file):
     with open(file, "r") as f:
         lines = f.readlines()
-        
+
     return lines
 
 def get_date_from_filename(filename):

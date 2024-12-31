@@ -47,7 +47,7 @@ def read_tail(thefile):
 
         # seek the end of the file
         thefile.seek(0, os.SEEK_END)
-        
+
         # start infinite loop
         while not STOP_CONSOLE:
             # read last line of file
@@ -105,13 +105,13 @@ def read(file_path: str):
                 except Exception as e:
                     logging.info(f"Error occurred for in-game command {command}: {e}")
 
-            if line_data["type"] in ["PRINT", 
-                                     "SAY", 
-                                     "ANNOUNCE", 
-                                     "RENAME", 
-                                     "CONNECTED", 
-                                     "DISCONNECTED", 
-                                     "ENTEREDGAME", 
+            if line_data["type"] in ["PRINT",
+                                     "SAY",
+                                     "ANNOUNCE",
+                                     "RENAME",
+                                     "CONNECTED",
+                                     "DISCONNECTED",
+                                     "ENTEREDGAME",
                                      "JOINEDSPEC",
                                      "REACHEDFINISH",
                                      "YOURRANK"]:
@@ -145,10 +145,10 @@ def process_line(line):
 
     line_data = {
         "id": message_to_id(f"{time.time()}_MISC"),
-        "type": "MISC", 
-        "command": None, 
-        "author": None, 
-        "content": line, 
+        "type": "MISC",
+        "command": None,
+        "author": None,
+        "content": line,
         "timestamp": time.time()
     }
 
@@ -182,8 +182,8 @@ def process_line(line):
                     api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
-            """ 
-                Maybe we can also add a display message with the player name and/or the record 
+            """
+                Maybe we can also add a display message with the player name and/or the record
                 #playerName = line[:line.index(' broke the server record with')]
                 #playerRecord = line[line.index(' broke the server record with') + len(' broke the server record with'):]
                 #api.display_message("{playerName} broke the record with {playerRecord}")
@@ -353,11 +353,11 @@ def process_line(line):
         # logging.info(f'LINE: {line}')
 
         for fun in [
-                    parse_chat_message, 
-                    parse_chat_announce, 
-                    parse_print, 
-                    parse_scores, 
-                    parse_rename, 
+                    parse_chat_message,
+                    parse_chat_announce,
+                    parse_print,
+                    parse_scores,
+                    parse_rename,
                     parse_connected,
                     parse_disconnected,
                     parse_entered_game,

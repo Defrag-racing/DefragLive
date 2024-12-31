@@ -86,15 +86,15 @@ def load_filters():
 def filter_line_data(data):
     if type(data) != dict:
         return data
-    if data["type"] not in ["PRINT", 
-                            "SAY", 
-                            "ANNOUNCE", 
-                            "RENAME", 
-                            "CONNECTED", 
-                            "DISCONNECTED", 
-                            "ENTEREDGAME", 
-                            "JOINEDSPEC", 
-                            "REACHEDFINISH", 
+    if data["type"] not in ["PRINT",
+                            "SAY",
+                            "ANNOUNCE",
+                            "RENAME",
+                            "CONNECTED",
+                            "DISCONNECTED",
+                            "ENTEREDGAME",
+                            "JOINEDSPEC",
+                            "REACHEDFINISH",
                             "YOURRANK"]:
         return data
 

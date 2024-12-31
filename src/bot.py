@@ -71,7 +71,7 @@ TWITCH_CMDS = [
     ["gamma"],
     ["connect", "c"],
     ["reshade"],
-    ["reload"],			   
+    ["reload"],
     ["next", "n"],
     ["prev", "p"],
 ##    ["scores", "scoreboard","score","scoreboards","scr","sc","scrs","scors","scroes","scar","scora","sorces","scoars","scs","scrose"],
@@ -223,24 +223,24 @@ if __name__ == "__main__":
     serverstate_thread.start()
 
     if config.DEVELOPMENT:
-        flask_thread = threading.Thread(target=websocket_console.app.run, 
+        flask_thread = threading.Thread(target=websocket_console.app.run,
                                         daemon=True,
                                         kwargs={
-                                            'host': environ['FLASK_SERVER']['host'], 
+                                            'host': environ['FLASK_SERVER']['host'],
                                             'port': environ['FLASK_SERVER']['port'],
                                         }
         )
     else:
-        flask_thread = threading.Thread(target=websocket_console.run_flask_server, 
-                                        daemon=True, 
+        flask_thread = threading.Thread(target=websocket_console.run_flask_server,
+                                        daemon=True,
                                         kwargs={
-                                            'host': environ['FLASK_SERVER']['host'], 
+                                            'host': environ['FLASK_SERVER']['host'],
                                             'port': environ['FLASK_SERVER']['port']
                                         }
         )
 
     flask_thread.start()
-    
+
     ws_loop = asyncio.new_event_loop()
     ws_thread = threading.Thread(target=websocket_console.ws_worker, args=(console.WS_Q, ws_loop,), daemon=True)
     ws_thread.start()

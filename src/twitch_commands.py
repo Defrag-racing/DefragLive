@@ -103,7 +103,7 @@ async def cgaz(ctx, author, args):
 async def nodraw(ctx, author, args):
     api.exec_command(f"toggle df_mp_NoDrawRadius 100 100000;cg_centertime 3;displaymessage 140 10 ^3{author} ^7has changed: ^3Players visibility")
     MapData.toggle(serverstate.STATE.mapname, 'nodraw', 100000, 100)
-    
+
 
 async def angles(ctx, author, args):
     api.exec_command(f"toggle df_chs1_Info6 0 40;cg_centertime 3;displaymessage 140 10 ^3{author} ^7has changed: ^3Weapon angles")

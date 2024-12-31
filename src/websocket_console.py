@@ -185,14 +185,14 @@ def on_ws_message(msg):
     except Exception as e:
         logging.info('ERROR [on_ws_message]:', e)
         return
-    
+
     # if there is no origin, exit
     # this function only processes messages directly from twitch console extension
     if 'origin' not in message:
         return
     if message['origin'] != 'twitch':
         return
-    
+
     if 'message' in message:
         if message['message'] is None:
             message['message'] = {}
@@ -259,7 +259,7 @@ async def ws_receive(websocket):
 #                     await websocket.close(reason='KTHXBYE!')
 #                 else:
 #                     await websocket.send(msg)
-            
+
 #             await asyncio.sleep(0)
 
 
