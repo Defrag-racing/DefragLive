@@ -12,7 +12,6 @@ import json
 import api
 from hashlib import blake2b
 import logging
-import twitch_commands
 
 import dfcommands as cmd
 import filters

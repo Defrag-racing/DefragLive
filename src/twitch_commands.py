@@ -1,23 +1,10 @@
-import os
-from twitchio.ext import commands
 import config
 import api
-import subprocess
 import servers
-import time
-import console
 import serverstate
 import requests
 from env import environ
-import threading
-import asyncio
-import websockets
-import json
-from multiprocessing import Process
 import logging
-from datetime import datetime
-import sys
-import pathlib
 from mapdata import MapData
 
 USE_WHITELIST = 0

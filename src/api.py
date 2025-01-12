@@ -1,7 +1,5 @@
 import os
 import time
-import keyboard
-from pywinauto import application
 from env import environ
 import logging
 

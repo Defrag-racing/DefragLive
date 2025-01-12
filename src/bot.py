@@ -1,5 +1,4 @@
 # bot.py
-from distutils.log import debug
 import os # for importing env vars for the bot to use
 from twitchio.ext import commands
 import config
@@ -17,7 +16,6 @@ from multiprocessing import Process
 import logging
 from datetime import datetime
 import sys
-import pathlib
 import twitch_commands
 import filters
 

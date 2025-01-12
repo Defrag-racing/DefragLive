@@ -50,7 +50,7 @@ def serverstate_to_json():
 # - Flask API for the twitch extension
 # ------------------------------------------------------------
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 app = Flask(__name__)
 
 @app.route('/serverstate.json')

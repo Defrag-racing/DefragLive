@@ -17,11 +17,8 @@ import config
 import os
 import servers
 import logging
-import threading
 import json
-import time
 from hashlib import md5
-import datetime
 # import mapdata
 from websocket_console import notify_serverstate_change
 import traceback
