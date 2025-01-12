@@ -83,6 +83,7 @@ def get_list(list):
     with open(list_path, "r") as list_file:
         for line in list_file:
             stripped_line = line.strip()
-            if(stripped_line == ''): continue
+            if (stripped_line == ''):
+                continue
             wordlist.append(stripped_line)
     return wordlist

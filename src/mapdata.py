@@ -18,7 +18,7 @@ STORAGE_PATH = environ['MAP_DATA']['STORAGE_PATH']
 MAPDATA_TABLE = environ['MAP_DATA']['MAPDATA_TABLE']
 
 SAVED_CMDS = {
-    "angles" : {
+    "angles": {
         "cmd": "df_chs1_Info6",
         "default": 0
     },
@@ -47,7 +47,9 @@ SAVED_CMDS = {
 
 CURRENT_MAP = None
 
-singleton = lambda c: c()
+
+def singleton(c): return c()
+
 
 @singleton
 class MapData(object):
@@ -137,6 +139,7 @@ class MapData(object):
         cur.execute(f'DELETE FROM {MAPDATA_TABLE} WHERE mapname = ?', (mapname,))
         con.commit()
         con.close()
+
 
 # mapdataHook is a hook that is used to check when map changes
 # if it does, then it applies data from the database to the current map

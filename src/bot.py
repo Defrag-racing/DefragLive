@@ -1,5 +1,5 @@
 # bot.py
-import os # for importing env vars for the bot to use
+import os  # for importing env vars for the bot to use
 from twitchio.ext import commands
 import config
 import api
@@ -21,8 +21,8 @@ import filters
 
 
 # Daily restart variables
-LAST_TIME=""
-RESTART_TIMESTAMP="04"
+LAST_TIME = ""
+RESTART_TIMESTAMP = "04"
 
 df_channel = environ['CHANNEL'] if 'CHANNEL' in environ and environ['CHANNEL'] != "" else input("Your twitch channel name: ")
 
@@ -35,8 +35,10 @@ SOUND_CMDS = [
 ]
 
 # Twitch commands that start with (?), to add a command
-# add it as an array inside this array, where multiple entries are aliases, and the first entry is the actual command
-# also add the function of the command inside twitch_commands.py (command function must be named as the first entry of your command)
+# add it as an array inside this array, where multiple entries
+# are aliases, and the first entry is the actual command
+# also add the function of the command inside twitch_commands.py
+# (command function must be named as the first entry of your command)
 TWITCH_CMDS = [
     ["restart"],
     ["triggers"],
@@ -79,6 +81,7 @@ TWITCH_CMDS = [
 ]
 
 # bot setup
+# FIXME: Argument missing for parameter "token"?
 bot = commands.Bot(
     irc_token=environ['TMI_TOKEN'],
     client_id=environ['CLIENT_ID'],
@@ -86,6 +89,7 @@ bot = commands.Bot(
     prefix=environ['BOT_PREFIX'],
     initial_channels=[df_channel]
 )
+
 
 @bot.event
 async def event_ready():
@@ -164,11 +168,12 @@ async def event_message(ctx):
         api.exec_command(message)
         time.sleep(debounce)
 
-    elif  message.startswith("$"):  # viewer sound commands
+    elif message.startswith("$"):  # viewer sound commands
         for sound_cmd in SOUND_CMDS:
             if message.startswith(sound_cmd):
                 logging.info(f"Sound command recieved ({sound_cmd})")
-                api.play_sound(sound_cmd.replace('$', '') + '.wav') #odfe appears to only support .wav format, not mp3, so we can hardcode it
+                # odfe appears to only support .wav format, not mp3, so we can hardcode it
+                api.play_sound(sound_cmd.replace('$', '') + '.wav')
                 time.sleep(debounce)
     return
 
@@ -188,14 +193,13 @@ def launch():
     subprocess.Popen(args=[config.DF_EXE_PATH, "+cl_title", "TwitchBot Engine", "+con_title", "TwitchBot Console", "+connect", launch_ip], cwd=os.path.dirname(config.DF_EXE_PATH))
 
 
-
 if __name__ == "__main__":
     config.read_cfg()
     window_flag = False
 
     filters.init()
 
-    twitchbot_logfile =f'{datetime.now().strftime("%m-%d-%Y_%H-%M-%S")}_twitchbot.log'
+    twitchbot_logfile = f'{datetime.now().strftime("%m-%d-%Y_%H-%M-%S")}_twitchbot.log'
     file_handler = logging.FileHandler(filename=os.path.join(environ['LOG_DIR_PATH'], twitchbot_logfile))
     stdout_handler = logging.StreamHandler(sys.stdout)
     handlers = [file_handler, stdout_handler]

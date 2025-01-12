@@ -14,7 +14,6 @@ import filters
 # logger.setLevel(logging.DEBUG)
 # logger.addHandler(logging.StreamHandler())
 
-# ------------------------------------------------------------
 
 def serverstate_to_json():
     data = {
@@ -52,6 +51,7 @@ def serverstate_to_json():
 
 from flask import Flask, jsonify
 app = Flask(__name__)
+
 
 @app.route('/serverstate.json')
 def parsed_serverstate():
@@ -148,7 +148,7 @@ def handle_ws_command(msg):
     author = 'Guest'
     if 'author' in msg['message']:
         author = msg['message']['author'] if msg['message']['author'] is not None else 'Guest'
-    if type(content) != dict:
+    if type(content) is not dict:
         return
 
     if content['action'] == 'delete_message':

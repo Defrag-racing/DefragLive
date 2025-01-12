@@ -55,6 +55,7 @@ class State:
     """
     Class that stores data about the state of the server and players
     """
+
     def __init__(self, secret, server_info, players, bot_id):
         for key in server_info:
             setattr(self, key.replace('sv_', ''), server_info[key])
@@ -165,11 +166,11 @@ class State:
             return
 
 
-
 class Player:
     """
     Simple class for storing data about each client/player present in the server.
     """
+
     def __init__(self, id, player_data):
         self.id = id
         for key in player_data:
@@ -222,7 +223,8 @@ def start():
                             curr_state = f"Spectating {STATE.current_player.n} on {STATE.mapname}" \
                                          f" in server {STATE.hostname} | ip: {STATE.ip}"
                         if curr_state_hash != prev_state_hash:
-                            notify_serverstate_change() # Notify all websocket clients about new serverstate
+                            # Notify all websocket clients about new serverstate
+                            notify_serverstate_change()
                         prev_state = curr_state
                         prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
@@ -315,6 +317,7 @@ def initialize_state(force=False):
 
     return True
 
+
 def standby_mode_started():
     global RECONNECTED_CHECK
     logging.info("[Note] Goin on standby mode.")
@@ -340,6 +343,7 @@ def standby_mode_started():
     if not ignore_finish_standbymode:
         standby_mode_finished()
 
+
 def standby_mode_finished():
     global IGNORE_IPS
 
@@ -356,6 +360,7 @@ def standby_mode_finished():
 
     logging.info("[SERVERSTATE] Connecting Now : " + str(new_server))
     connect(new_server)
+
 
 def validate_state():
     """
@@ -374,7 +379,7 @@ def validate_state():
         spectating_self = False
 
     else:
-    # Current player spectated is our bot, and thus idle.
+        # Current player spectated is our bot, and thus idle.
         spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn \
                       or STATE.current_player_id == STATE.bot_id
 
@@ -455,7 +460,8 @@ def validate_state():
 
     else:  # AFK detection
         inputs = STATE.get_inputs()
-        if inputs == '': # Empty key presses. This is an AFK strike.
+        if inputs == '':
+            # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
             if STATE.afk_counter >= 15 and STATE.afk_counter % 5 == 0:
                 logging.info(f"AFK detected. Strike {STATE.afk_counter}/{AFK_TIMEOUT}")
@@ -480,6 +486,7 @@ def connect(ip, caller=None):
     global CONNECTING
     global IGNORE_IPS
     global CURRENT_IP
+    global RECONNECTED_CHECK
 
     STATE_INITIALIZED = False
     logging.info(f"Connecting to {ip}...")
@@ -533,7 +540,8 @@ async def switch_spec(direction='next', channel=None):
             next_id_index = 0
         follow_id = spec_ids[next_id_index]
 
-        if follow_id == STATE.current_player_id: # Landed on the same id (list is length 1). No other players to spec.
+        if follow_id == STATE.current_player_id:
+            # Landed on the same id (list is length 1). No other players to spec.
             msg = "No other players to spectate."
             api.display_message(f"^7{msg}")
             logging.info(msg)
@@ -583,7 +591,6 @@ def display_player_name(follow_id):
                 STATE.show_name = True
 
 
-
 def check_for_blacklist_name(plyr_name):
     name = plyr_name.strip()
     blacklisted_words = config.get_list('blacklist_names')
@@ -624,7 +631,8 @@ def get_svinfo_report(filename):
             players.append(Player(cli_id, player_data))
             num_players += 1
             if player_data['t'] != '3':  # Filter out spectators out of followable ids.
-                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':  # Filter out nospec'd players out of followable ids
+                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':
+                    # Filter out nospec'd players out of followable ids
                     spec_ids.append(cli_id)
                 else:
                     nospec_ids.append(cli_id)
@@ -658,7 +666,8 @@ def parse_svinfo_report(lines):
         # Check for ip
         if ip is None:
             try:
-                ip = re.match(title_r, line).group(1)  # Extract server's ip
+                # Extract server's ip
+                ip = re.match(title_r, line).group(1)
             except:
                 pass
 

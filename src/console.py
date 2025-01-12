@@ -38,26 +38,26 @@ ERROR_FILTERS = {
 
 
 def read_tail(thefile):
-        '''
-        Generator function that yields new lines in a file
-        '''
+    '''
+    Generator function that yields new lines in a file
+    '''
 
-        global STOP_CONSOLE
+    global STOP_CONSOLE
 
-        # seek the end of the file
-        thefile.seek(0, os.SEEK_END)
+    # seek the end of the file
+    thefile.seek(0, os.SEEK_END)
 
-        # start infinite loop
-        while not STOP_CONSOLE:
-            # read last line of file
-            line = thefile.readline()
+    # start infinite loop
+    while not STOP_CONSOLE:
+        # read last line of file
+        line = thefile.readline()
 
-            # sleep if file hasn't been updated
-            if not line:
-                time.sleep(0.25)
-                continue
+        # sleep if file hasn't been updated
+        if not line:
+            time.sleep(0.25)
+            continue
 
-            yield line
+        yield line
 
 
 def read(file_path: str):
@@ -92,7 +92,7 @@ def read(file_path: str):
             LOG.append(line_data)
 
             # Cut log to size
-            if(len(LOG) > 5000):
+            if (len(LOG) > 5000):
                 LOG = LOG[1000:]
 
             # if line_data.pop("command") is not None:
@@ -121,12 +121,14 @@ def read(file_path: str):
 def message_to_id(msg):
     return blake2b(bytes(msg, "utf-8"), digest_size=8, salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()
 
+
 # Not the most accurate way, but it works for most players
 # The only exception is when a player has (:) in their name
 def is_server_msg(line, msg):
     data = line[:line.index(msg)]
 
-    return not ':' in data
+    return ':' not in data
+
 
 def process_line(line):
     """
@@ -151,8 +153,8 @@ def process_line(line):
         "timestamp": time.time()
     }
 
-    errors = ['ERROR: Unhandled exception cought'] # you can add more errors like this: ['error1', 'error2', 'error3']
-
+    # you can add more errors like this: ['error1', 'error2', 'error3']
+    errors = ['ERROR: Unhandled exception cought']
 
     # SERVERCOMMAND
 
@@ -199,7 +201,6 @@ def process_line(line):
                 logging.info("Multiple people in server, initiating vote tally.")
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
-
 
         if line.startswith('Com_TouchMemory:'):
             time.sleep(3)
@@ -262,7 +263,8 @@ def process_line(line):
 
         def parse_print(command):
             # PRINT
-            print_r = r"^print\s*\"(.*?)$" # Prints have their ending quotation mark on the next line, very strange
+            # Prints have their ending quotation mark on the next line, very strange
+            print_r = r"^print\s*\"(.*?)$"
             match = re.match(print_r, command)
 
             print_message = match.group(1)
@@ -453,7 +455,7 @@ def wait_log(start_ts=0, end_type=None, end_author=None, end_content=None, end_c
             time.sleep(delay)
             continue
 
-        slice = LOG[length : length_new]
+        slice = LOG[length:length_new]
 
         logging.info("MORE", slice)
 
