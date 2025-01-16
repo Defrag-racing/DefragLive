@@ -8,7 +8,8 @@ from ahk import AHK
 import config
 
 
-AHK = AHK()
+# AHK = AHK()
+AHK = AHK(executable_path='C:\\Program Files\\AutoHotkey\\AutoHotkey.exe')
 CONSOLEWINDOW = "TwitchBot Console"
 ENGINEWINDOW = "TwitchBot Engine"
 
@@ -37,7 +38,7 @@ def api_init():
                     "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
                     "\nWinHide," + CONSOLEWINDOW +
                     "\nFileAppend, %console%, * ;", blocking=True)
-    WINDOW = AHK.find_window(process=config.DF_EXE_PATH, title=b"TwitchBot Engine")
+    WINDOW = AHK.find_window(title="TwitchBot Engine")
 
     if CONSOLE is None or WINDOW is None:
         raise WindowNotFoundError

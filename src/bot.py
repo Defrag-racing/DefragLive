@@ -81,8 +81,8 @@ TWITCH_CMDS = [
 ]
 
 # bot setup
-# FIXME: Argument missing for parameter "token"?
 bot = commands.Bot(
+    token=environ['TMI_TOKEN'],
     irc_token=environ['TMI_TOKEN'],
     client_id=environ['CLIENT_ID'],
     nick=environ['BOT_NICK'],
@@ -91,19 +91,20 @@ bot = commands.Bot(
 )
 
 
-@bot.event
+@bot.event()
 async def event_ready():
     """Called once when the bot goes online."""
     logging.info(f"{environ['BOT_NICK']} is online!")
-    ws = bot._ws  # this is only needed to send messages within event_ready
-    await ws.send_privmsg(df_channel, f"/me has landed!")
+    # Get the channel object using bot.get_channel() and send the message
+    channel = bot.get_channel(df_channel)
+    await channel.send("/me has landed!")
 
 
-@bot.event
+@bot.event()
 async def event_message(ctx):
     """Activates for every message"""
     debounce = 1  # interval between consecutive commands and messages
-    author = ctx.author.name
+    author = ctx.author.name if ctx.author else "Unknown"  # Check if author exists
     message = ctx.content
 
     if ";" in message:  # prevent q3 command injections
@@ -171,9 +172,8 @@ async def event_message(ctx):
     elif message.startswith("$"):  # viewer sound commands
         for sound_cmd in SOUND_CMDS:
             if message.startswith(sound_cmd):
-                logging.info(f"Sound command recieved ({sound_cmd})")
-                # odfe appears to only support .wav format, not mp3, so we can hardcode it
-                api.play_sound(sound_cmd.replace('$', '') + '.wav')
+                logging.info(f"Sound command received ({sound_cmd})")
+                api.play_sound(sound_cmd.replace('$', '') + '.wav') # .wav format only
                 time.sleep(debounce)
     return
 
