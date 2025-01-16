@@ -77,15 +77,15 @@ def handle_howmany(line_data):
 
 
 def handle_clear(line_data):
-   reply_string = "^7Ingame chat for viewers has been ^1erased."
-   api.exec_command(f"clear; say {reply_string}")
-   return None
+    reply_string = "^7Ingame chat for viewers has been ^1erased."
+    api.exec_command(f"clear; say {reply_string}")
+    return None
 
 
 def handle_discord(line_data):
-   reply_string = "^7Join our discord: ^3https://discord.defrag.racing"
-   api.exec_command(f"say {reply_string}")
-   return None
+    reply_string = "^7Join our discord: ^3https://discord.defrag.racing"
+    api.exec_command(f"say {reply_string}")
+    return None
 
 
 def handle_stonk(line_data):
@@ -109,7 +109,7 @@ def handle_stonk(line_data):
         price, change = [response.json()['price'][i]['fmt'] for i in ('regularMarketPrice', 'regularMarketChangePercent')]
         currency = response.json()['price']['currency']
         color = "^1" if '-' in change else "^2"
-        change = change.replace('%',' p/c')
+        change = change.replace('%', ' p/c')
         reply_string = f"^7{symbol}^3: {color}{price} {currency} ({change}) ^7{short_name} ({exchange})"
     except:
         reply_string = "Invalid input. Usage: ?stonk <symbol>"

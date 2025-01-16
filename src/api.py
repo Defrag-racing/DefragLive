@@ -1,7 +1,5 @@
 import os
 import time
-import keyboard
-from pywinauto import application
 from env import environ
 import logging
 
@@ -15,7 +13,8 @@ CONSOLEWINDOW = "TwitchBot Console"
 ENGINEWINDOW = "TwitchBot Engine"
 
 # delay between sounds, used to prevent overlapping sounds
-# could be set to zero if u don't care about sound overlapping (maybe viewer should be able to spam holy or 4ity or whatever)
+# could be set to zero if u don't care about sound overlapping
+# (maybe viewer should be able to spam holy or 4ity or whatever)
 SOUND_DELAY = 1
 SOUND_TIMER = 0.0
 
@@ -30,13 +29,13 @@ def api_init():
     global WINDOW
 
     if environ["DEVELOPMENT"]:
-        CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW + \
-                   "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW + \
+        CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW +
+                   "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
                    "\nFileAppend, %console%, * ;", blocking=True)
     else:
         CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW + \
-                    "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW + \
-                    "\nWinHide," + CONSOLEWINDOW + \
+                    "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
+                    "\nWinHide," + CONSOLEWINDOW +
                     "\nFileAppend, %console%, * ;", blocking=True)
     WINDOW = AHK.find_window(process=config.DF_EXE_PATH, title=b"TwitchBot Engine")
 
@@ -48,8 +47,9 @@ def exec_command(cmd, verbose=True):
     if verbose:
         logging.info(f"Execing command {cmd}")
     # send the text to the console window, escape commas (must be `, to show up in chat)
-    AHK.run_script("ControlSetText, , " + cmd.replace(',', '`,') + ", ahk_id " + CONSOLE+ \
+    AHK.run_script("ControlSetText, , " + cmd.replace(',', '`,') + ", ahk_id " + CONSOLE +
                 "\nControlSend, , {Enter}, ahk_id " + CONSOLE, blocking=True)
+
 
 def play_sound(sound):
     if not os.path.exists(environ['DF_DIR'] + f"music\\common\\{sound}"):
@@ -67,6 +67,7 @@ def play_sound(sound):
         return
 
     logging.info(f"Sound is already playing, cancelling current request !")
+
 
 def press_key(key, verbose=True):
     try:
@@ -89,6 +90,7 @@ def hold_key(x, duration):
         WINDOW.send(x, blocking=True, press_duration=duration * 1000)
     except AttributeError:
         logging.info(f"Window not active. {x} was not sent to the client.")
+
 
 def reset_visuals():
     exec_command(f"df_chs1_Info6 0;r_picmip 0;r_gamma 1;r_mapoverbrightbits 2;df_mp_NoDrawRadius 100;cg_drawgun 1")

@@ -1,26 +1,14 @@
-import os
-from twitchio.ext import commands
 import config
 import api
-import subprocess
 import servers
-import time
-import console
 import serverstate
 import requests
 from env import environ
-import threading
-import asyncio
-import websockets
-import json
-from multiprocessing import Process
 import logging
-from datetime import datetime
-import sys
-import pathlib
 from mapdata import MapData
 
 USE_WHITELIST = 0
+
 
 async def connect(ctx, author, args):
     ip = args[0]
@@ -252,6 +240,7 @@ async def gamma(ctx, author, args):
 
 async def ip(ctx, author, args):
     api.exec_command(f"cg_centertime 5;displaymessage 140 8 Current Ip: ^1{serverstate.STATE.ip};")
+
 
 async def howmany(ctx, author, args):
     client_id = environ['TWITCH_API']['client_id']

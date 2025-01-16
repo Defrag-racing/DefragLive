@@ -1,4 +1,3 @@
-import os
 import re
 import ahocorasick
 import itertools
@@ -24,8 +23,10 @@ SPECIAL_NUMBERS = {
     '|': ['i', 'l']
 }
 
+
 def strip_q3_colors(value):
     return re.sub(r'\^(X.{6}|.)', '', value)
+
 
 # replaces "w o r d" with "word"
 def strip_spaces_after_every_letter(value):
@@ -48,13 +49,13 @@ def strip_spaces_after_every_letter(value):
     return ' '.join(tokens)
 
 
-
 def strip_repeated_characters(value):
     result = []
     for x in value:
         if not result or result[-1] != x:
             result.append(x)
     return ''.join(result)
+
 
 def clean_string(value):
     pass1 = strip_q3_colors(value)
@@ -84,7 +85,7 @@ def load_filters():
 
 
 def filter_line_data(data):
-    if type(data) != dict:
+    if type(data) is not dict:
         return data
     if data["type"] not in ["PRINT",
                             "SAY",
@@ -119,6 +120,7 @@ def replace_special_chars(msg):
     all_items = [SPECIAL_NUMBERS.get(char, [char]) for char in msg]
     return [''.join(elem) for elem in itertools.product(*all_items)]
 
+
 def filter_numbers_in_message(msg):
     parts = msg.split(' ')
 
@@ -134,6 +136,7 @@ def filter_numbers_in_message(msg):
                 parts[idx] = part
 
     return ' '.join(parts)
+
 
 def filter_capital_letters_in_message(msg):
     parts = msg.split(' ')

@@ -1,10 +1,10 @@
 import requests
 import urllib3
-from bs4 import BeautifulSoup
 
 urllib3.disable_warnings()
 
 LAST_SERVERS_DATA = None
+
 
 def is_valid_ip(ip):
     servers_data = scrape_servers_data()
@@ -15,7 +15,6 @@ def is_valid_ip(ip):
             'message': 'The server (' + ip + ') is empty. Try again later, or try to connect to a different server.'
         }
 
-
     if ip in servers_data['active']:
         return {
             'status': True
@@ -25,6 +24,7 @@ def is_valid_ip(ip):
         'status': False,
         'message': 'The server (' + ip + ') is not whitelisted OR has not yet been registered as active.'
     }
+
 
 def scrape_servers_data():
     global LAST_SERVERS_DATA
@@ -41,6 +41,7 @@ def scrape_servers_data():
     LAST_SERVERS_DATA = data
 
     return data
+
 
 def get_most_popular_server():
     """ Returns the IP of the server with the most players, or defrag.rocks if no servers are populated """
@@ -59,6 +60,7 @@ def get_most_popular_server():
             max_plyr_ip = ip_addr
 
     return max_plyr_ip
+
 
 def get_least_popular_server():
     """ Returns the IP of the server with the least players, used only for development """
