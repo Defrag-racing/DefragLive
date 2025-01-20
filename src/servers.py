@@ -30,7 +30,7 @@ def scrape_servers_data():
     global LAST_SERVERS_DATA
 
     try:
-        url = f'https://servers.defrag.racing/'
+        url = f'https://defrag.racing/servers/json'
         data = requests.get(url, verify=False).json()
     except:
         return LAST_SERVERS_DATA or {

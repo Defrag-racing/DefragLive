@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 src/env.py
+src/env-backup.py
 logs/
 
 storage/*.db
