@@ -56,8 +56,14 @@ async def prev(ctx, author, args):
 ##async def scores(ctx, author, args):
 ##    api.hold_key(config.get_bind("+scores"), 4.5)
 
+##async def reload(ctx, author, args):
+##    api.hold_key(config.get_bind("+scores"), 0.0001)
+
+
 async def reload(ctx, author, args):
-    api.hold_key(config.get_bind("+scores"), 0.0001)
+    key = config.get_bind("+scores")
+    print(f"Key for +scores: {key}")
+    api.hold_key(key, 0.0001)
 
 
 async def triggers(ctx, author, args):

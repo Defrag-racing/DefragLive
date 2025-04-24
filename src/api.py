@@ -83,12 +83,15 @@ def display_message(message, time=3, y_pos=140, size=10):
     exec_command(f"cg_centertime {time};displaymessage {y_pos} {size} {message}")
 
 
-# duration in seconds
 def hold_key(x, duration):
     try:
         logging.info(f"Holding {x} for {duration} seconds")
-
-        WINDOW.send(x, blocking=True, press_duration=duration * 1000)
+        # Send key down
+        WINDOW.send(x, blocking=True)
+        # Wait for the specified duration
+        time.sleep(duration)
+        # Send key up (using AutoHotkey to release the key)
+        AHK.run_script(f"Send {{{x} up}}", blocking=True)
     except AttributeError:
         logging.info(f"Window not active. {x} was not sent to the client.")
 
