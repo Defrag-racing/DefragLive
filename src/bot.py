@@ -19,6 +19,9 @@ import sys
 import twitch_commands
 import filters
 
+# Write PID to file at startup
+with open("bot_pid.txt", "w") as f:
+    f.write(str(os.getpid()))
 
 # Daily restart variables
 LAST_TIME = ""
