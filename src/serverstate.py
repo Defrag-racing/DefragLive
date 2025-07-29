@@ -38,6 +38,8 @@ VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
 RECONNECTED_CHECK = False
 
 CURRENT_IP = None
+MAX_STANDBY_RETRIES = 3
+STANDBY_RETRY_COUNT = 0
 
 STATE = None
 PAUSE_STATE = False
@@ -234,6 +236,9 @@ def start():
                 if getattr(STATE, 'vote_active', False):
                     STATE.handle_vote()
 
+            # Add small delay to prevent excessive CPU usage
+            time.sleep(0.1)
+
         except Exception as e:
             if e.args[0] == 'VidPaused':
                 logging.info("Vid paused.")
@@ -250,7 +255,7 @@ def initialize_state(force=False):
     global PAUSE_STATE
     global INIT_TIMEOUT
     global STATE_INITIALIZED
-    global LAST_TIME
+    global CONNECTING
 
     try:
         secret = ''.join(random.choice('0123456789ABCDEF') for i in range(16))
@@ -260,25 +265,37 @@ def initialize_state(force=False):
         while server_info is None or bot_player == [] or force == True:
             force = False
             init_counter += 1
-            if not PAUSE_STATE:
-                api.exec_command(f"seta color1 {secret};silent svinfo_report serverstate.txt", verbose=False)
-            else:
-                raise Exception("Paused.")
-            time.sleep(1)  # Add delay to avoid overwhelming the server
-            if new_report_exists(config.STATE_REPORT_P):
-                server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
-                bot_player = [player for player in players if player.c1 == secret]
+            
+            # Check if we should abort initialization
             if init_counter >= INIT_TIMEOUT:
                 logging.warning(f"Initialization failed after {INIT_TIMEOUT} attempts.")
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
-                if new_ip:
+                if new_ip and new_ip != CURRENT_IP:
                     logging.info(f"Retrying connection to new server: {new_ip}")
                     connect(new_ip)
                     return False
                 else:
-                    logging.error("No active servers available.")
+                    logging.error("No active servers available or same server.")
                     return False
+            
+            if not PAUSE_STATE and not CONNECTING:
+                api.exec_command(f"seta color1 {secret};silent svinfo_report serverstate.txt", verbose=False)
+            else:
+                logging.info("State paused or connecting, waiting...")
+                time.sleep(2)
+                continue
+                
+            time.sleep(1)  # Add delay to avoid overwhelming the server
+            
+            if new_report_exists(config.STATE_REPORT_P):
+                server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
+                if server_info and players:
+                    bot_player = [player for player in players if player.c1 == secret]
 
+        if not bot_player:
+            logging.error("Bot player not found in server.")
+            return False
+            
         bot_id = bot_player[0].id
         STATE = State(secret, server_info, players, bot_id)
         STATE.current_player_id = bot_id
@@ -286,13 +303,15 @@ def initialize_state(force=False):
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
 
-        time.sleep(3)
+        # Send nospec notifications to players
+        time.sleep(2)
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
                 continue
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
+            
         return True
 
     except Exception as e:
@@ -327,18 +346,25 @@ def standby_mode_started():
 
 def standby_mode_finished():
     global IGNORE_IPS
+    global STANDBY_RETRY_COUNT
+    global MAX_STANDBY_RETRIES
 
     IGNORE_IPS = []
+    STANDBY_RETRY_COUNT += 1
 
     logging.info("[Note] standby mode finished. Checking for new servers.")
 
     new_server = servers.get_next_active_server(IGNORE_IPS)
 
-    if new_server is None or new_server == "":
+    if (new_server is None or new_server == "") and STANDBY_RETRY_COUNT < MAX_STANDBY_RETRIES:
         logging.info("[Note] No Active servers found. Going back to standby mode.")
         standby_mode_started()
         return
+    elif STANDBY_RETRY_COUNT >= MAX_STANDBY_RETRIES:
+        logging.error("[Note] Maximum standby retries reached. Stopping bot.")
+        return
 
+    STANDBY_RETRY_COUNT = 0  # Reset counter on successful connection attempt
     logging.info("[SERVERSTATE] Connecting Now : " + str(new_server))
     connect(new_server)
 
@@ -465,14 +491,24 @@ def connect(ip, caller=None):
     global RECONNECTED_CHECK
 
     STATE_INITIALIZED = False
+    
+    # Validate IP format
+    if not ip or ip.strip() == "":
+        logging.error("Invalid IP address provided.")
+        return
+        
     logging.info(f"Connecting to {ip}...")
     PAUSE_STATE = True
     CONNECTING = True
-    STATE.idle_counter = 0
-    STATE.afk_counter = 0
-    STATE.afk_ids = []
+    
+    if STATE:
+        STATE.idle_counter = 0
+        STATE.afk_counter = 0
+        STATE.afk_ids = []
+        
     if caller is not None:
-        STATE.connect_msg = f"^7Brought by ^3{caller}"
+        if STATE:
+            STATE.connect_msg = f"^7Brought by ^3{caller}"
         IGNORE_IPS = []
 
     RECONNECTED_CHECK = True
@@ -481,16 +517,29 @@ def connect(ip, caller=None):
     # Spustit připojení
     api.exec_command("connect " + ip, verbose=False)
 
-    # Po pokusu o připojení zkontrolovat, zda je inicializace úspěšná
-    if initialize_state():
-        PAUSE_STATE = False  # Zrušit pauzu po úspěšné inicializaci
-        CONNECTING = False
-        logging.info(f"Successfully connected to {ip}.")
-    else:
-        logging.error(f"Connection to {ip} failed.")
-        PAUSE_STATE = False  # Zrušit pauzu i při selhání, aby se systém nezasekl
-        CONNECTING = False
-        standby_mode_started()  # Přejít do pohotovostního režimu
+    # Wait a bit for connection to establish
+    time.sleep(3)
+    
+    # Try to initialize state
+    max_retries = 3
+    for retry in range(max_retries):
+        if initialize_state():
+            PAUSE_STATE = False
+            CONNECTING = False
+            logging.info(f"Successfully connected to {ip}.")
+            return
+        else:
+            logging.warning(f"Connection attempt {retry + 1}/{max_retries} failed.")
+            time.sleep(2)
+    
+    # All retries failed
+    logging.error(f"Connection to {ip} failed after {max_retries} attempts.")
+    PAUSE_STATE = False
+    CONNECTING = False
+    
+    # Only go to standby if we're not already in a retry loop
+    if STANDBY_RETRY_COUNT < MAX_STANDBY_RETRIES:
+        standby_mode_started()
 
 
 def new_report_exists(path):
@@ -498,6 +547,10 @@ def new_report_exists(path):
     Helper function for checking if the report is new relative to a given time stamp.
     """
     global LAST_INIT_REPORT_TIME, LAST_REPORT_TIME
+    
+    if not os.path.exists(path):
+        return False
+        
     curr_report_mod_time = os.path.getmtime(path)
     if path == config.INITIAL_REPORT_P:
         last_report_ts = LAST_INIT_REPORT_TIME
@@ -505,6 +558,7 @@ def new_report_exists(path):
     else:
         last_report_ts = LAST_REPORT_TIME
         LAST_REPORT_TIME = curr_report_mod_time
+        
     return curr_report_mod_time > last_report_ts
 
 
@@ -515,9 +569,13 @@ async def switch_spec(direction='next', channel=None):
     """
     global STATE
     global IGNORE_IPS
+    
+    if not STATE:
+        logging.error("STATE is None, cannot switch spec.")
+        return False
 
     IGNORE_IPS = []
-    STATE.afk_list = []
+    STATE.afk_ids = []  # Fixed: was afk_list, should be afk_ids
     spec_ids = STATE.spec_ids if direction == 'next' else STATE.spec_ids[::-1]  # Reverse spec_list if going backwards.
 
     if STATE.current_player_id != STATE.bot_id:
@@ -546,10 +604,14 @@ async def switch_spec(direction='next', channel=None):
 def spectate_player(follow_id):
     """Spectate player chosen by twich users based on their client id"""
     global IGNORE_IPS
+    
+    if not STATE:
+        return "Server state not initialized."
+        
     IGNORE_IPS = []
-    STATE.afk_list = []
+    STATE.afk_ids = []  # Fixed: was afk_list, should be afk_ids
+    
     if follow_id in STATE.spec_ids:
-##        display_player_name(follow_id)
         api.exec_command(f"follow {follow_id}")  # Follow this player.
         STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
         STATE.current_player_id = follow_id  # Notify the state object of the new player we are spectating.
@@ -591,7 +653,9 @@ def get_svinfo_report(filename):
     """
     Handles parsed data of the server info report. Turns the parsed data into coherent objects.
     """
-    global STATE
+    if not os.path.exists(filename):
+        logging.error(f"Report file {filename} does not exist.")
+        return None, None, None
 
     with open(filename, "r") as svinfo_report_f:
         num_players = 0
@@ -605,29 +669,34 @@ def get_svinfo_report(filename):
             server_info['curr_dfn'] = info['Info']['player']
             server_info['ip'] = ip
         else:
-            time.sleep(5)
+            logging.warning("Server Info not found in report.")
             return None, None, None
+            
         players, spec_ids, nospec_ids, nopmids = [], [], [], []
 
-    for header in info:
-        try:
-            match = re.match(r"^Client Info (\d+?)$", header)
-            cli_id = match.group(1)
-            player_data = info[header]
+        for header in info:
+            try:
+                match = re.match(r"^Client Info (\d+?)$", header)
+                if not match:
+                    continue
+                    
+                cli_id = match.group(1)
+                player_data = info[header]
 
-            players.append(Player(cli_id, player_data))
-            num_players += 1
-            if player_data['t'] != '3':  # Filter out spectators out of followable ids.
-                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':  # Filter out nospec'd players out of followable ids
-                    spec_ids.append(cli_id)
-                else:
-                    nospec_ids.append(cli_id)
+                players.append(Player(cli_id, player_data))
+                num_players += 1
+                if player_data.get('t') != '3':  # Filter out spectators out of followable ids.
+                    if player_data.get('c1') not in ['nospec', 'nospecpm']:  # Filter out nospec'd players out of followable ids
+                        spec_ids.append(cli_id)
+                    else:
+                        nospec_ids.append(cli_id)
 
-                if player_data['c1'] == 'nospecpm':
-                    nopmids.append(cli_id)
+                    if player_data.get('c1') == 'nospecpm':
+                        nopmids.append(cli_id)
 
-        except:
-            continue
+            except Exception as e:
+                logging.warning(f"Error parsing client info: {e}")
+                continue
 
     server_info['spec_ids'] = spec_ids
     server_info['nospec_ids'] = nospec_ids
@@ -652,21 +721,23 @@ def parse_svinfo_report(lines):
         # Check for ip
         if ip is None:
             try:
-                ip = re.match(title_r, line).group(1)  # Extract server's ip
-            except:
-                pass
+                match = re.match(title_r, line)
+                if match:
+                    ip = match.group(1)  # Extract server's ip
+            except Exception as e:
+                logging.debug(f"Error parsing IP from line: {e}")
 
         # Check if line is a header
         try:
-            header = re.match(header_r, line).group(1)
-
-            # Create new dictionary for header
-            if header not in info:
-                info[header] = {}
-
-            continue
-        except:
-            pass
+            match = re.match(header_r, line)
+            if match:
+                header = match.group(1)
+                # Create new dictionary for header
+                if header not in info:
+                    info[header] = {}
+                continue
+        except Exception as e:
+            logging.debug(f"Error parsing header from line: {e}")
 
         # Don't parse any lines until we have a header
         if not header:
@@ -679,7 +750,7 @@ def parse_svinfo_report(lines):
             value = match.group(2)
 
             info[header][key] = value
-        except:
-            pass
+        except Exception as e:
+            logging.debug(f"Error parsing key-value from line: {e}")
 
     return info, ip
