@@ -17,8 +17,11 @@ import config
 import os
 import servers
 import logging
+import threading
 import json
+import time
 from hashlib import md5
+import datetime
 # import mapdata
 from websocket_console import notify_serverstate_change
 import traceback
@@ -55,7 +58,6 @@ class State:
     """
     Class that stores data about the state of the server and players
     """
-
     def __init__(self, secret, server_info, players, bot_id):
         for key in server_info:
             setattr(self, key.replace('sv_', ''), server_info[key])
@@ -166,11 +168,11 @@ class State:
             return
 
 
+
 class Player:
     """
     Simple class for storing data about each client/player present in the server.
     """
-
     def __init__(self, id, player_data):
         self.id = id
         for key in player_data:
@@ -180,85 +182,70 @@ class Player:
 
 
 def start():
-    """
-    The main gateway for fetching the server state through /svinfo_report. It runs through a loop indefinitely and
-    attempts to extract new data only if state is not paused through the PAUSE_STATE flag.
-    """
     global STATE
     global PAUSE_STATE
     global VID_RESTARTING
 
     state_paused_timer = 0
-
     prev_state, prev_state_hash, curr_state = None, None, None
     initialize_state()
+
     while True:
         try:
             if PAUSE_STATE:
-                raise Exception("Paused")
-            elif new_report_exists(config.INITIAL_REPORT_P):
+                logging.info("State paused.")
+                state_paused_timer += 1
+                if state_paused_timer > 60:
+                    logging.info("State paused for over 60 seconds. Attempting recovery...")
+                    prev_state, prev_state_hash, curr_state = None, None, None
+                    if not initialize_state():
+                        logging.error("Failed to reinitialize state. Entering standby mode.")
+                        standby_mode_started()
+                    state_paused_timer = 0
+                    PAUSE_STATE = False  # Zrušit pauzu po pokusu o obnovu
+                time.sleep(1)
+                continue
+
+            if new_report_exists(config.INITIAL_REPORT_P):
                 initialize_state()
 
-            # Only refresh the STATE object if new data has been read and if state is not paused
-            while not new_report_exists(config.INITIAL_REPORT_P) and not PAUSE_STATE:
+            while not new_report_exists(config.STATE_REPORT_P) and not PAUSE_STATE:
                 time.sleep(2)
-
                 if not PAUSE_STATE:
-                    api.exec_command("varmath color2 = $chsinfo(152);"  # Store inputs in color2
-                                           "silent svinfo_report serverstate.txt", verbose=False)  # Write a new report
+                    api.exec_command("varmath color2 = $chsinfo(152);silent svinfo_report serverstate.txt", verbose=False)
                 elif not VID_RESTARTING:
                     raise Exception("VidPaused")
 
                 if new_report_exists(config.STATE_REPORT_P):
-                    # Given that a new report exists, read this new data.
                     server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
-
-                    if bool(server_info):  # New data is not empty and valid. Update the state object.
+                    if bool(server_info):
                         STATE.players = players
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
-                        validate_state()  # Check for nospec, self spec, afk, and any other problems.
+                        validate_state()
                         curr_state_hash = md5(f'{curr_state}_{num_players}_{str([pl.__dict__ for pl in STATE.players])}'.encode('utf-8')).digest()
                         if STATE.current_player is not None and STATE.current_player_id != STATE.bot_id:
-                            curr_state = f"Spectating {STATE.current_player.n} on {STATE.mapname}" \
-                                         f" in server {STATE.hostname} | ip: {STATE.ip}"
+                            curr_state = f"Spectating {STATE.current_player.n} on {STATE.mapname} in server {STATE.hostname} | ip: {STATE.ip}"
                         if curr_state_hash != prev_state_hash:
-                            # Notify all websocket clients about new serverstate
                             notify_serverstate_change()
                         prev_state = curr_state
                         prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
                 if getattr(STATE, 'vote_active', False):
                     STATE.handle_vote()
-        except Exception as e:
-            if e.args[0] == 'Paused':
-                logging.info("State paused.")
-                # state_paused_timer += 1
 
-                # if state_paused_timer > 60:
-                #     prev_state, prev_state_hash, curr_state = None, None, None
-                #     initialize_state()
-                #     state_paused_timer = 0
-                #     PAUSE_STATE = False
-                # pass
-            elif e.args[0] == 'VidPaused':
+        except Exception as e:
+            if e.args[0] == 'VidPaused':
                 logging.info("Vid paused.")
             else:
-                prev_state, prev_state_hash, curr_state = None, None, None
-                initialize_state()  # Handle the first state fetch. Some extra processing needs to be done this time.
-                logging.info(f"State failed: {e}")
+                logging.error(f"State failed: {e}")
                 print(traceback.format_exc())
-                logging.info(f"State failed: {e}")
+                prev_state, prev_state_hash, curr_state = None, None, None
+                initialize_state()
             time.sleep(1)
 
 
 def initialize_state(force=False):
-    """
-    Handles necessary processing on the first iteration of state retrieval.
-    Important steps done here:
-        - Check if there's a valid connection
-        - Retrieve the bot's client id using the "color1" cvar and a fresh secret code
-    """
     global STATE
     global PAUSE_STATE
     global INIT_TIMEOUT
@@ -266,35 +253,33 @@ def initialize_state(force=False):
     global LAST_TIME
 
     try:
-        # Create a secret code. Only "secret" for one use.
         secret = ''.join(random.choice('0123456789ABCDEF') for i in range(16))
         server_info, bot_player, timeout_flag = None, [], 0
-
         init_counter = 0
-        while server_info is None or bot_player == [] or force == True:  # Continue running this block until valid data and bot id found
+
+        while server_info is None or bot_player == [] or force == True:
             force = False
             init_counter += 1
             if not PAUSE_STATE:
-                # Set color1 to secret code to determine bot's client id
                 api.exec_command(f"seta color1 {secret};silent svinfo_report serverstate.txt", verbose=False)
             else:
                 raise Exception("Paused.")
-
-            if new_report_exists(config.STATE_REPORT_P):  # New data detected
-                server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)  # Read data
-                # Select player that contains this secret as their color1, this will be the bot player.
+            time.sleep(1)  # Add delay to avoid overwhelming the server
+            if new_report_exists(config.STATE_REPORT_P):
+                server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
                 bot_player = [player for player in players if player.c1 == secret]
-
-            # If loop hits the max iterations, the connection was not established properly
             if init_counter >= INIT_TIMEOUT:
-                # Retry a connection to best server
+                logging.warning(f"Initialization failed after {INIT_TIMEOUT} attempts.")
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
-                logging.info("[SERVERSTATE] Connecting Now : " + str(new_ip))
-                connect(new_ip)
+                if new_ip:
+                    logging.info(f"Retrying connection to new server: {new_ip}")
+                    connect(new_ip)
+                    return False
+                else:
+                    logging.error("No active servers available.")
+                    return False
 
-        bot_id = bot_player[0].id  # Find our own ID
-
-        # Create global server object
+        bot_id = bot_player[0].id
         STATE = State(secret, server_info, players, bot_id)
         STATE.current_player_id = bot_id
         STATE.num_players = num_players
@@ -305,17 +290,14 @@ def initialize_state(force=False):
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
                 continue
-
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
-    except:
+        return True
+
+    except Exception as e:
+        logging.error(f"Initialization failed: {e}")
         return False
-
-    # if not mapdata_thread.is_alive():
-    #     mapdata_thread.start()
-
-    return True
 
 
 def standby_mode_started():
@@ -343,7 +325,6 @@ def standby_mode_started():
     if not ignore_finish_standbymode:
         standby_mode_finished()
 
-
 def standby_mode_finished():
     global IGNORE_IPS
 
@@ -360,7 +341,6 @@ def standby_mode_finished():
 
     logging.info("[SERVERSTATE] Connecting Now : " + str(new_server))
     connect(new_server)
-
 
 def validate_state():
     """
@@ -379,7 +359,7 @@ def validate_state():
         spectating_self = False
 
     else:
-        # Current player spectated is our bot, and thus idle.
+    # Current player spectated is our bot, and thus idle.
         spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn \
                       or STATE.current_player_id == STATE.bot_id
 
@@ -460,8 +440,7 @@ def validate_state():
 
     else:  # AFK detection
         inputs = STATE.get_inputs()
-        if inputs == '':
-            # Empty key presses. This is an AFK strike.
+        if inputs == '': # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
             if STATE.afk_counter >= 15 and STATE.afk_counter % 5 == 0:
                 logging.info(f"AFK detected. Strike {STATE.afk_counter}/{AFK_TIMEOUT}")
@@ -478,9 +457,6 @@ def validate_state():
 
 
 def connect(ip, caller=None):
-    """
-    Handles connection to a server and re-attempts if connection is not resolved.
-    """
     global PAUSE_STATE
     global STATE_INITIALIZED
     global CONNECTING
@@ -500,10 +476,21 @@ def connect(ip, caller=None):
         IGNORE_IPS = []
 
     RECONNECTED_CHECK = True
-
     CURRENT_IP = ip
 
+    # Spustit připojení
     api.exec_command("connect " + ip, verbose=False)
+
+    # Po pokusu o připojení zkontrolovat, zda je inicializace úspěšná
+    if initialize_state():
+        PAUSE_STATE = False  # Zrušit pauzu po úspěšné inicializaci
+        CONNECTING = False
+        logging.info(f"Successfully connected to {ip}.")
+    else:
+        logging.error(f"Connection to {ip} failed.")
+        PAUSE_STATE = False  # Zrušit pauzu i při selhání, aby se systém nezasekl
+        CONNECTING = False
+        standby_mode_started()  # Přejít do pohotovostního režimu
 
 
 def new_report_exists(path):
@@ -540,8 +527,7 @@ async def switch_spec(direction='next', channel=None):
             next_id_index = 0
         follow_id = spec_ids[next_id_index]
 
-        if follow_id == STATE.current_player_id:
-            # Landed on the same id (list is length 1). No other players to spec.
+        if follow_id == STATE.current_player_id: # Landed on the same id (list is length 1). No other players to spec.
             msg = "No other players to spectate."
             api.display_message(f"^7{msg}")
             logging.info(msg)
@@ -591,6 +577,7 @@ def display_player_name(follow_id):
                 STATE.show_name = True
 
 
+
 def check_for_blacklist_name(plyr_name):
     name = plyr_name.strip()
     blacklisted_words = config.get_list('blacklist_names')
@@ -631,8 +618,7 @@ def get_svinfo_report(filename):
             players.append(Player(cli_id, player_data))
             num_players += 1
             if player_data['t'] != '3':  # Filter out spectators out of followable ids.
-                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':
-                    # Filter out nospec'd players out of followable ids
+                if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':  # Filter out nospec'd players out of followable ids
                     spec_ids.append(cli_id)
                 else:
                     nospec_ids.append(cli_id)
@@ -666,8 +652,7 @@ def parse_svinfo_report(lines):
         # Check for ip
         if ip is None:
             try:
-                # Extract server's ip
-                ip = re.match(title_r, line).group(1)
+                ip = re.match(title_r, line).group(1)  # Extract server's ip
             except:
                 pass
 
