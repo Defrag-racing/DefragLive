@@ -229,6 +229,23 @@ async def picmip(ctx, author, args):
         await ctx.channel.send(f"{author}, the allowed values for picmip are 0-5.")
 
 
+async def fullbright(ctx, author, args):
+    whitelisted_twitch_users = config.get_list('whitelist_twitchusers')
+    if USE_WHITELIST and author not in whitelisted_twitch_users and not ctx.author.is_mod:
+        await ctx.channel.send(f"{author}, you do not have the correct permissions to use this command."
+                                f"If you wanna be whitelisted to use such a command, please contact neyo#0382 on discord.")
+        return
+    value = args[0]
+    if value.isdigit() and (0 <= int(value) <= 6):
+        logging.info("vid_restarting..")
+        serverstate.VID_RESTARTING = True
+        serverstate.PAUSE_STATE = True
+        api.exec_command(f"r_fullbright {value};vid_restart")
+        MapData.save(serverstate.STATE.mapname, 'fullbright', value)
+    else:
+        await ctx.channel.send(f"{author}, the allowed values for fullbright are 0-1.")
+
+
 async def gamma(ctx, author, args):
     whitelisted_twitch_users = config.get_list('whitelist_twitchusers')
     if USE_WHITELIST and author not in whitelisted_twitch_users and not ctx.author.is_mod:

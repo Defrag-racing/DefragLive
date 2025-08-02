@@ -10,6 +10,7 @@ import re
 import queue
 import json
 import api
+import threading
 from hashlib import blake2b
 import logging
 
@@ -35,6 +36,38 @@ ERROR_FILTERS = {
     "^0^7D^6e^7Frag^6.^7LIVE^0/^7 was kicked": "RECONNECT"
     #"ERROR: CM_LoadMap:": "DIFFERENT_IP"
 }
+
+
+def handle_error_with_delay(error_line, error_action):
+    """
+    Handle error detection with a 5-second delay before executing the action
+    """
+    if error_action == "RECONNECT":
+        logging.info(f"Error detected: {error_line}")
+        logging.info("Scheduling reconnect in 5 seconds...")
+        
+        # Use threading to avoid blocking the main console reading loop
+        def delayed_reconnect():
+            time.sleep(5)
+            logging.info("Executing delayed reconnect...")
+            api.exec_command("connect " + serverstate.CURRENT_IP)
+        
+        reconnect_thread = threading.Thread(target=delayed_reconnect)
+        reconnect_thread.daemon = True
+        reconnect_thread.start()
+        
+    elif error_action == "DIFFERENT_IP":
+        logging.info(f"Error detected: {error_line}")
+        logging.info("Scheduling IP change reconnect in 5 seconds...")
+        
+        def delayed_ip_reconnect():
+            time.sleep(5)
+            logging.info("Executing delayed IP reconnect...")
+            api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
+        
+        reconnect_thread = threading.Thread(target=delayed_ip_reconnect)
+        reconnect_thread.daemon = True
+        reconnect_thread.start()
 
 
 def read_tail(thefile):
@@ -171,16 +204,10 @@ def process_line(line):
                 logging.info("Game is loading. Pausing state.")
 
         if line in ERROR_FILTERS:
-            if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 4:
+            if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 10:
                 LAST_ERROR_TIME = time.time()
-                logging.info(f"Error detected: {line}")
                 logging.info(f"Previous line: {PREVIOUS_LINE}")
-                if ERROR_FILTERS[line] == "RECONNECT":
-                    logging.info("Reconnecting to server...")
-                    api.exec_command("connect " + serverstate.CURRENT_IP)
-                elif ERROR_FILTERS[line] == "DIFFERENT_IP":
-                    logging.info("Server IP changed. Reconnecting...")
-                    api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
+                handle_error_with_delay(line, ERROR_FILTERS[line])
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             """

@@ -71,6 +71,7 @@ TWITCH_CMDS = [
     ["spec"],
     ["brightness"],
     ["picmip"],
+    ["fullbright"],
     ["gamma"],
     ["connect", "c"],
     ["reshade"],
