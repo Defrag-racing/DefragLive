@@ -37,8 +37,8 @@ if exist bot_pid.txt (
 )
 
 :: Wait 5 hours (18,000 seconds) with timeout command
-echo Waiting 5 hours before restarting bot.py...
-timeout /t 18000 /nobreak
+echo Waiting 2,5 hours before restarting bot.py...
+timeout /t 9000 /nobreak
 :: For testing, you can use:
 :: timeout /t 30 /nobreak
 echo Done.

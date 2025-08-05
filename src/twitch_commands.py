@@ -36,7 +36,7 @@ async def restart(ctx, author, args):
 
 async def reconnect(ctx, author, args):
     serverstate.RECONNECTED_CHECK = True
-    api.exec_command(f"reconnect")
+    api.exec_command("reconnect")  # This line is already correct in your code
 
 
 async def reshade(ctx, author, args):

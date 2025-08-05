@@ -33,8 +33,8 @@ ERROR_FILTERS = {
     "Signal caught (11)": "RECONNECT",
     "Incorrect challenge, please reconnect": "RECONNECT",
     "ERROR: CL_ParseServerMessage: read past end of server message": "RECONNECT",
-    "^0^7D^6e^7Frag^6.^7LIVE^0/^7 was kicked": "RECONNECT"
-    #"ERROR: CM_LoadMap:": "DIFFERENT_IP"
+    "^0^7D^6e^7Frag^6.^7LIVE^0/^7 was kicked": "RECONNECT",
+    "Server connection timed out": "RECONNECT"
 }
 
 
@@ -50,7 +50,8 @@ def handle_error_with_delay(error_line, error_action):
         def delayed_reconnect():
             time.sleep(5)
             logging.info("Executing delayed reconnect...")
-            api.exec_command("connect " + serverstate.CURRENT_IP)
+            # Simply use the built-in reconnect command
+            api.exec_command("reconnect")
         
         reconnect_thread = threading.Thread(target=delayed_reconnect)
         reconnect_thread.daemon = True
@@ -63,7 +64,16 @@ def handle_error_with_delay(error_line, error_action):
         def delayed_ip_reconnect():
             time.sleep(5)
             logging.info("Executing delayed IP reconnect...")
-            api.exec_command("connect " + servers.get_next_active_server([serverstate.CURRENT_IP]))
+            try:
+                new_ip = servers.get_next_active_server([serverstate.CURRENT_IP] if serverstate.CURRENT_IP else [])
+                if new_ip:
+                    logging.info(f"Connecting to different server: {new_ip}")
+                    api.exec_command("connect " + new_ip)
+                    serverstate.CURRENT_IP = new_ip
+                else:
+                    logging.error("Could not get a different server IP")
+            except Exception as e:
+                logging.error(f"Failed to get different server: {e}")
         
         reconnect_thread = threading.Thread(target=delayed_ip_reconnect)
         reconnect_thread.daemon = True
