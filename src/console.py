@@ -245,7 +245,45 @@ def process_line(line):
 
         if 'called a vote:' in line and is_server_msg(line, 'called a vote:'):
             logging.info("Vote detected.")
-            if serverstate.STATE.num_players == 2:  # only bot and 1 other player in game, always f1
+            
+            # Extract the vote content to check if it's a kick vote against the bot
+            vote_content = line[line.index('called a vote:') + len('called a vote:'):].strip()
+            bot_name = None
+            
+            # Get bot's name from state
+            if hasattr(serverstate, 'STATE') and serverstate.STATE:
+                bot_player = serverstate.STATE.get_player_by_id(serverstate.STATE.bot_id)
+                if bot_player:
+                    bot_name = bot_player.n
+            
+            # Check if this is a kick vote targeting the bot
+            is_bot_kick = False
+            if 'kick' in vote_content.lower() or 'clientkick' in vote_content.lower():
+                # Remove color codes for better matching
+                clean_vote_content = re.sub(r'\^.', '', vote_content.lower())
+                clean_bot_name = re.sub(r'\^.', '', bot_name.lower()) if bot_name else ''
+                
+                # Common variations of the bot name to check for
+                bot_name_patterns = ['defrag.live', 'defraglive', 'defrag live']
+                
+                # Check if bot's name appears in the vote content
+                if clean_bot_name and clean_bot_name in clean_vote_content:
+                    is_bot_kick = True
+                    logging.info(f"Detected kick vote against bot by name: {vote_content}")
+                else:
+                    # Check common bot name patterns
+                    for pattern in bot_name_patterns:
+                        if pattern in clean_vote_content:
+                            is_bot_kick = True
+                            logging.info(f"Detected kick vote against bot by pattern '{pattern}': {vote_content}")
+                            break
+            
+            if is_bot_kick:
+                # Always vote F2 (no) when someone tries to kick the bot
+                logging.info("Voting F2 to reject kick vote against bot.")
+                api.exec_command("vote no")
+                api.exec_command("say ^7Vote to kick me detected. Voted ^1f2^7.")
+            elif serverstate.STATE.num_players == 2:  # only bot and 1 other player in game, always f1
                 logging.info("1 other player in server, voting yes.")
                 api.exec_command("vote yes")
                 api.exec_command("say ^7Vote detected. Voted ^3f1^7.")
