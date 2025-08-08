@@ -42,6 +42,8 @@ def handle_error_with_delay(error_line, error_action):
     """
     Handle error detection with a 5-second delay before executing the action
     """
+    global LAST_ERROR_TIME
+    
     if error_action == "RECONNECT":
         logging.info(f"Error detected: {error_line}")
         logging.info("Scheduling reconnect in 5 seconds...")
@@ -50,8 +52,20 @@ def handle_error_with_delay(error_line, error_action):
         def delayed_reconnect():
             time.sleep(5)
             logging.info("Executing delayed reconnect...")
-            # Simply use the built-in reconnect command
-            api.exec_command("reconnect")
+            
+            # Use the proper serverstate reconnect function instead of just the command
+            # This ensures proper state management and connection flow
+            if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
+                current_ip = serverstate.STATE.ip
+                if current_ip:
+                    logging.info(f"Reconnecting to current server: {current_ip}")
+                    serverstate.connect(current_ip)
+                else:
+                    logging.info("No current IP found, using basic reconnect command")
+                    api.exec_command("reconnect")
+            else:
+                logging.info("No state available, using basic reconnect command")
+                api.exec_command("reconnect")
         
         reconnect_thread = threading.Thread(target=delayed_reconnect)
         reconnect_thread.daemon = True
@@ -68,12 +82,13 @@ def handle_error_with_delay(error_line, error_action):
                 new_ip = servers.get_next_active_server([serverstate.CURRENT_IP] if serverstate.CURRENT_IP else [])
                 if new_ip:
                     logging.info(f"Connecting to different server: {new_ip}")
-                    api.exec_command("connect " + new_ip)
-                    serverstate.CURRENT_IP = new_ip
+                    serverstate.connect(new_ip)
                 else:
-                    logging.error("Could not get a different server IP")
+                    logging.error("Could not get a different server IP, trying basic reconnect")
+                    api.exec_command("reconnect")
             except Exception as e:
-                logging.error(f"Failed to get different server: {e}")
+                logging.error(f"Failed to get different server: {e}, trying basic reconnect")
+                api.exec_command("reconnect")
         
         reconnect_thread = threading.Thread(target=delayed_ip_reconnect)
         reconnect_thread.daemon = True
