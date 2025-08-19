@@ -26,6 +26,7 @@ WS_Q = queue.Queue()
 STOP_CONSOLE = False
 PREVIOUS_LINE = ''
 LAST_ERROR_TIME = None
+PAUSE_STATE_START_TIME = None  # Add this global variable
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -36,6 +37,52 @@ ERROR_FILTERS = {
     "^0^7D^6e^7Frag^6.^7LIVE^0/^7 was kicked": "RECONNECT",
     "Server connection timed out": "RECONNECT"
 }
+
+
+def check_pause_timeout():
+    """
+    Check if state has been paused for too long and trigger reconnect if needed
+    """
+    global PAUSE_STATE_START_TIME
+    
+    if serverstate.PAUSE_STATE:
+        if PAUSE_STATE_START_TIME is None:
+            PAUSE_STATE_START_TIME = time.time()
+            logging.info("State pause started - timer initiated")
+        elif time.time() - PAUSE_STATE_START_TIME > 60:  # 60 seconds timeout
+            logging.info("State has been paused for over 60 seconds - forcing reconnect")
+            PAUSE_STATE_START_TIME = None
+            
+            # Force reconnect in a separate thread to avoid blocking
+            def force_reconnect():
+                try:
+                    if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
+                        current_ip = serverstate.STATE.ip
+                        if current_ip:
+                            logging.info(f"Force reconnecting to current server: {current_ip}")
+                            serverstate.connect(current_ip)
+                        else:
+                            logging.info("No current IP found, trying to get new server")
+                            new_ip = servers.get_most_popular_server()
+                            if new_ip:
+                                serverstate.connect(new_ip)
+                            else:
+                                api.exec_command("reconnect")
+                    else:
+                        logging.info("No state available, using basic reconnect command")
+                        api.exec_command("reconnect")
+                except Exception as e:
+                    logging.error(f"Force reconnect failed: {e}")
+                    api.exec_command("reconnect")
+            
+            reconnect_thread = threading.Thread(target=force_reconnect)
+            reconnect_thread.daemon = True
+            reconnect_thread.start()
+    else:
+        # Reset timer when state is no longer paused
+        if PAUSE_STATE_START_TIME is not None:
+            PAUSE_STATE_START_TIME = None
+            logging.info("State unpaused - timer reset")
 
 
 def handle_error_with_delay(error_line, error_action):
@@ -113,6 +160,8 @@ def read_tail(thefile):
         # sleep if file hasn't been updated
         if not line:
             time.sleep(0.25)
+            # Check pause timeout during idle periods
+            check_pause_timeout()
             continue
 
         yield line
@@ -175,6 +224,9 @@ def read(file_path: str):
                 CONSOLE_DISPLAY.append(line_data)
                 WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
 
+            # Check pause timeout after processing each line
+            check_pause_timeout()
+
 
 def message_to_id(msg):
     return blake2b(bytes(msg, "utf-8"), digest_size=8, salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()
@@ -199,6 +251,7 @@ def process_line(line):
     global ERROR_FILTERS
     global LAST_ERROR_TIME
     global PREVIOUS_LINE
+    global PAUSE_STATE_START_TIME  # Add this to global access
 
     line = line.strip()
 
@@ -227,6 +280,8 @@ def process_line(line):
             if not serverstate.PAUSE_STATE:
                 serverstate.PAUSE_STATE = True
                 logging.info("Game is loading. Pausing state.")
+                # Reset the timer when pause state is set
+                PAUSE_STATE_START_TIME = None
 
         if line in ERROR_FILTERS:
             if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 10:
@@ -297,6 +352,8 @@ def process_line(line):
             api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
             serverstate.initialize_state(True)
             serverstate.PAUSE_STATE = False
+            # Reset timer when pause state is cleared
+            PAUSE_STATE_START_TIME = None
 
         if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
@@ -307,11 +364,15 @@ def process_line(line):
                 logging.info("vid_restart done.")
                 serverstate.PAUSE_STATE = False
                 serverstate.VID_RESTARTING = False
+                # Reset timer when pause state is cleared
+                PAUSE_STATE_START_TIME = None
             elif serverstate.PAUSE_STATE:
                 time.sleep(1)
                 serverstate.PAUSE_STATE = False
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()
+                # Reset timer when pause state is cleared
+                PAUSE_STATE_START_TIME = None
 
             # for player in serverstate.players:
             #     api.exec_command('tell ' + str(player.id) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to fully enjoy your gameplay.')

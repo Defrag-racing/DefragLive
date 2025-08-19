@@ -304,6 +304,9 @@ def initialize_state(force=False):
         time.sleep(3)
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
+                # Send one-time message to nospecpm players
+                api.exec_command('tell ' + str(nospecid) + ' ^7nospec active, ^3defraglive ^7cant spectate.')
+                time.sleep(1)
                 continue
 
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
