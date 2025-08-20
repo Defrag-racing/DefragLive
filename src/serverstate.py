@@ -75,6 +75,16 @@ class State:
         self.vn_count = 0
         self.voter_names = []
         self.show_name = True
+        # NEW: Track custom AFK timeouts per player
+        self.player_afk_timeouts = {}  # player_id -> custom_timeout
+
+    def get_afk_timeout_for_player(self, player_id):
+        """Get the AFK timeout for a specific player, defaulting to global AFK_TIMEOUT"""
+        return self.player_afk_timeouts.get(str(player_id), AFK_TIMEOUT)
+
+    def set_afk_timeout_for_player(self, player_id, timeout):
+        """Set a custom AFK timeout for a specific player"""
+        self.player_afk_timeouts[str(player_id)] = timeout
 
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -380,7 +390,6 @@ def validate_state():
 
     if STATE.get_player_by_id(STATE.bot_id) is None:
         spectating_self = False
-
     else:
         # Current player spectated is our bot, and thus idle.
         spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn \
@@ -389,8 +398,11 @@ def validate_state():
     # Current player spectated has turned on the no-spec system
     spectating_nospec = STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id
 
-    # The player that we are spectating has been AFK for our set limit of AFK strikes
-    spectating_afk = STATE.afk_counter >= AFK_TIMEOUT
+    # Get the AFK timeout for current player (could be extended)
+    current_afk_timeout = STATE.get_afk_timeout_for_player(STATE.current_player_id)
+
+    # The player that we are spectating has been AFK for their custom limit
+    spectating_afk = STATE.afk_counter >= current_afk_timeout
 
     # AFK player pre-processing
     if spectating_afk:
@@ -402,6 +414,9 @@ def validate_state():
                 logging.info("AFK. Switching...")
                 api.display_message("^3AFK detected. ^7Switching to the next player.", time=5)
                 STATE.afk_counter = 0  # Reset AFK strike counter for next player
+                # Reset the timeout for this player back to default
+                if str(STATE.current_player_id) in STATE.player_afk_timeouts:
+                    del STATE.player_afk_timeouts[str(STATE.current_player_id)]
         except ValueError:
             pass
 
@@ -423,10 +438,6 @@ def validate_state():
 
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
-
-            # if spectating_afk:
-            #     api.exec_command("say It appears that the player has been inactive for over a minute, so I will be moving on to the next available player.")
-
             STATE.idle_counter = 0  # Reset idle counter
 
         else:  # Only found ourselves to spec.
@@ -441,8 +452,6 @@ def validate_state():
 
             if STATE.idle_counter >= IDLE_TIMEOUT or spectating_afk:
                 # There's been no one on the server for a while or only afks. Switch servers.
-
-                # Ignore this ip until a good server is found
                 IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS and STATE.ip != "" else None
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
@@ -466,9 +475,62 @@ def validate_state():
         if inputs == '':
             # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
-            if STATE.afk_counter >= 15 and STATE.afk_counter % 5 == 0:
-                logging.info(f"AFK detected. Strike {STATE.afk_counter}/{AFK_TIMEOUT}")
-                api.display_message(f" AFK detected. Switching in {(int(AFK_TIMEOUT-STATE.afk_counter)*2)} seconds.", time=5)
+            
+            # Show notifications every 10 strikes starting from strike 15, but use custom timeout
+            if STATE.afk_counter >= 15 and STATE.afk_counter % 10 == 5:  # Every 10 strikes after 15: 15, 25, 35...
+                remaining_time = (current_afk_timeout - STATE.afk_counter) * 2
+                if remaining_time > 0:
+                    logging.info(f"AFK detected. Strike {STATE.afk_counter}/{current_afk_timeout}")
+                    
+                    # Send both in-game and Twitch chat notification
+                    player_name = STATE.current_player.n if STATE.current_player else "Unknown"
+                    api.display_message(f" AFK detected. Switching in {remaining_time} seconds.", time=5)
+                    
+                    # Also send to Twitch chat via websocket or direct chat bridge
+                    try:
+                        # Send to Twitch chat through the chat bridge system
+                        import console
+                        import json
+                        afk_msg = {
+                            'action': 'afk_notification',
+                            'message': f"AFK detected for {player_name}: {STATE.afk_counter}/{current_afk_timeout} strikes - switching in ~{remaining_time}s"
+                        }
+                        console.WS_Q.put(json.dumps(afk_msg))
+                    except Exception as e:
+                        logging.error(f"Failed to send AFK notification to Twitch: {e}")
+            
+            # Show help notification every 10 strikes starting from strike 20 (in between main notifications)
+            elif STATE.afk_counter >= 20 and STATE.afk_counter % 10 == 0:  # Every 10 strikes at 20, 30, 40...
+                remaining_time = (current_afk_timeout - STATE.afk_counter) * 2
+                if remaining_time > 0:
+                    logging.info(f"AFK help notification. Strike {STATE.afk_counter}/{current_afk_timeout}")
+                    
+                    # Send first help message to in-game
+                    api.display_message(f"Use ^3?^7afk reset to restart afk counter", time=2)
+                    
+                    # Send second help message after 2 seconds
+                    def send_second_help():
+                        import time
+                        time.sleep(3)
+                        api.display_message(f"Use ^3?^7afk extend to extend by 5min", time=2)
+                    
+                    import threading
+                    help_thread = threading.Thread(target=send_second_help)
+                    help_thread.daemon = True
+                    help_thread.start()
+                    
+                    # Also send help to Twitch chat
+                    try:
+                        import console
+                        import json
+                        help_msg = {
+                            'action': 'afk_help',
+                            'message': f"AFK Strike {STATE.afk_counter}/{current_afk_timeout} - Use ?afk reset to restart or ?afk extend for +5min"
+                        }
+                        console.WS_Q.put(json.dumps(help_msg))
+                    except Exception as e:
+                        logging.error(f"Failed to send AFK help notification to Twitch: {e}")
+                        
         else:
             # Activity detected, reset AFK strike counter and empty AFK list + ip blacklist
             if STATE.afk_counter >= 15:
@@ -478,7 +540,9 @@ def validate_state():
             STATE.afk_counter = 0
             STATE.afk_ids = []
             IGNORE_IPS = []
-
+            # Reset timeout back to default when player becomes active
+            if str(STATE.current_player_id) in STATE.player_afk_timeouts:
+                del STATE.player_afk_timeouts[str(STATE.current_player_id)]
 
 def connect(ip, caller=None):
     """

@@ -278,3 +278,86 @@ async def howmany(ctx, author, args):
     viewer_count = stream_data[0]['viewer_count']
     reply_string = f"$chsinfo(117) ^7-- you are being watched by ^3{viewer_count} ^7viewer" + ("s" if viewer_count > 0 else "")
     api.exec_command(f"varcommand say {reply_string}")
+
+
+async def afk(ctx, author, args):
+    """
+    Reset or extend AFK counter for the currently spectated player
+    Usage: ?afk reset - resets AFK counter to 0
+           ?afk extend - extends AFK timeout by 5 minutes (150 strikes)
+           ?afk - shows current AFK counter status
+    """
+    import serverstate
+    import api
+    import logging
+    
+    # Check if we have a valid state and are spectating someone
+    if not hasattr(serverstate, 'STATE') or serverstate.STATE is None:
+        await ctx.channel.send("No active server state available.")
+        return
+    
+    current_player = serverstate.STATE.current_player
+    if current_player is None or serverstate.STATE.current_player_id == serverstate.STATE.bot_id:
+        await ctx.channel.send("Not currently spectating a player.")
+        return
+    
+    player_name = current_player.n
+    current_afk = serverstate.STATE.afk_counter
+    
+    # Get the current effective AFK timeout for this player
+    current_timeout = serverstate.STATE.get_afk_timeout_for_player(serverstate.STATE.current_player_id)
+    
+    # If no arguments provided, show current status
+    if not args:
+        remaining = max(0, current_timeout - current_afk)
+        time_remaining = remaining * 2  # Each strike is ~2 seconds
+        await ctx.channel.send(f"AFK status for {player_name}: {current_afk}/{current_timeout} strikes. "
+                             f"~{time_remaining}s until switch.")
+        api.exec_command(f"cg_centertime 3;displaymessage 140 10 ^3{author} ^7checked AFK status: ^3{current_afk}^7/^3{current_timeout}")
+        return
+    
+    action = args[0].lower()
+    
+    if action == "reset":
+        # Reset AFK counter to 0
+        old_counter = serverstate.STATE.afk_counter
+        serverstate.STATE.afk_counter = 0
+        
+        # Remove from AFK list if they were in it
+        if serverstate.STATE.current_player_id in serverstate.STATE.afk_ids:
+            serverstate.STATE.afk_ids.remove(serverstate.STATE.current_player_id)
+        
+        # Clear ignore IPs list
+        serverstate.IGNORE_IPS = []
+        
+        # Reset timeout back to default
+        if str(serverstate.STATE.current_player_id) in serverstate.STATE.player_afk_timeouts:
+            del serverstate.STATE.player_afk_timeouts[str(serverstate.STATE.current_player_id)]
+        
+        logging.info(f"AFK counter reset by {author}: {old_counter} -> 0 for player {player_name}")
+        await ctx.channel.send(f"AFK counter reset for {player_name} (was {old_counter}/{current_timeout})")
+        api.exec_command(f"cg_centertime 3;displaymessage 140 10 ^3{author} ^7reset AFK counter for ^3{player_name}")
+        
+    elif action == "extend":
+        # Extend by 5 minutes (150 strikes, since each strike is ~2 seconds)
+        extension_strikes = 150
+        old_counter = serverstate.STATE.afk_counter
+        old_timeout = current_timeout
+        
+        # Set a new custom timeout for this player
+        new_timeout = current_afk + extension_strikes
+        serverstate.STATE.set_afk_timeout_for_player(serverstate.STATE.current_player_id, new_timeout)
+        
+        strikes_remaining = new_timeout - current_afk
+        extended_time = strikes_remaining * 2  # strikes × 2 seconds
+        
+        logging.info(f"AFK timeout extended by {author}: timeout {old_timeout} -> {new_timeout} for player {player_name} (gave {extension_strikes} additional strikes = ~{extended_time}s)")
+        
+        # Send to both Twitch chat and in-game
+        msg = f"Extended AFK timer for {player_name} by 5 minutes - now at {current_afk}/{new_timeout} (~{extended_time}s until switch)"
+        await ctx.channel.send(msg)
+        api.exec_command(f"say ^3{author} ^7extended AFK timer for ^3{player_name} ^7by 5 minutes")
+        api.exec_command(f"cg_centertime 3;displaymessage 140 10 ^3{author} ^7extended AFK timer for ^3{player_name} ^7by 5 minutes")
+        
+    else:
+        await ctx.channel.send(f"{author}, usage: ?afk [reset|extend] or just ?afk to check status")

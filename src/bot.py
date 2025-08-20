@@ -81,7 +81,8 @@ TWITCH_CMDS = [
 ##    ["scores", "scoreboard","score","scoreboards","scr","sc","scrs","scors","scroes","scar","scora","sorces","scoars","scs","scrose"],
     ["server", "sv"],
     ["ip"],
-    ["howmany"]
+    ["howmany"],
+    ["afk"]
 ]
 
 # bot setup
