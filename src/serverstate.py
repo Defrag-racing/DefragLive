@@ -506,13 +506,13 @@ def validate_state():
                     logging.info(f"AFK help notification. Strike {STATE.afk_counter}/{current_afk_timeout}")
                     
                     # Send first help message to in-game
-                    api.display_message(f"Use ^3?^7afk reset to restart afk counter", time=2)
+                    api.display_message(f"Use ^3?afk reset ^7to restart afk counter", time=2)
                     
-                    # Send second help message after 2 seconds
+                    # Send second help message after 3 seconds
                     def send_second_help():
                         import time
                         time.sleep(3)
-                        api.display_message(f"Use ^3?^7afk extend to extend by 5min", time=2)
+                        api.display_message(f"Use ^3?afk extend ^7to extend by 5min", time=2)
                     
                     import threading
                     help_thread = threading.Thread(target=send_second_help)
