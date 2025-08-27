@@ -27,6 +27,7 @@ STOP_CONSOLE = False
 PREVIOUS_LINE = ''
 LAST_ERROR_TIME = None
 PAUSE_STATE_START_TIME = None  # Add this global variable
+DELAYED_MESSAGE_QUEUE = []
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -210,27 +211,24 @@ def read(file_path: str):
                     handle_command(line_data)
                 except Exception as e:
                     logging.info(f"Error occurred for in-game command {command}: {e}")
-
-            if line_data["type"] in ["PRINT",
-                                     "SAY",
-                                     "ANNOUNCE", 
-                                     "RENAME",
-                                     "CONNECTED",
-                                     "DISCONNECTED",
-                                     "ENTEREDGAME",
-                                     "JOINEDSPEC",
-                                     "REACHEDFINISH",
-                                     "YOURRANK"]:
-                # Add 2 second delay for better video synchronization
-                def delayed_message_display():
-                    time.sleep(2)
+            if ("report written to system/reports/" in line_data["content"]):
+                # Skip system messages entirely
+                pass
+            elif line_data["type"] in ["PRINT", "SAY", "ANNOUNCE", "RENAME", "CONNECTED", 
+                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
+                                       "REACHEDFINISH", "YOURRANK"]:
+                
+                # Only delay player messages (SAY, REACHEDFINISH), send others immediately
+                if line_data["type"] in ["SAY", "REACHEDFINISH"]:
+                    # Add to delay queue
+                    DELAYED_MESSAGE_QUEUE.append({
+                        'message': line_data,
+                        'send_time': time.time() + 2  # 2 second delay
+                    })
+                else:
+                    # Send system messages immediately
                     CONSOLE_DISPLAY.append(line_data)
                     WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
-                
-                # Use threading to avoid blocking the main console reading loop
-                delay_thread = threading.Thread(target=delayed_message_display)
-                delay_thread.daemon = True
-                delay_thread.start()
 
             # Check pause timeout after processing each line
             check_pause_timeout()
@@ -624,3 +622,34 @@ def wait_log(start_ts=0, end_type=None, end_author=None, end_content=None, end_c
                 return line
 
         time.sleep(delay)
+
+def process_delayed_messages():
+    """Background thread to process delayed messages"""
+    global DELAYED_MESSAGE_QUEUE
+    while True:
+        current_time = time.time()
+        # Check for messages ready to be sent
+        messages_to_send = []
+        remaining_messages = []
+        
+        for delayed_msg in DELAYED_MESSAGE_QUEUE:
+            if current_time >= delayed_msg['send_time']:
+                messages_to_send.append(delayed_msg['message'])
+            else:
+                remaining_messages.append(delayed_msg)
+        
+        # Send ready messages
+        for msg in messages_to_send:
+            logging.info(f"Sending delayed message: {msg['type']} - {msg['content'][:50]}...")
+            CONSOLE_DISPLAY.append(msg)
+            WS_Q.put(json.dumps({'action': 'message', 'message': msg}))
+        
+        # Update queue
+        DELAYED_MESSAGE_QUEUE = remaining_messages
+        
+        time.sleep(0.1)  # Check every 100ms
+
+# Start the delay processor thread (add this in the read() function after STOP_CONSOLE = False)
+delay_processor = threading.Thread(target=process_delayed_messages)
+delay_processor.daemon = True
+delay_processor.start()
