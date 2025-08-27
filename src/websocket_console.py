@@ -9,6 +9,7 @@ import console
 import config
 import serverstate
 import filters
+import servers
 
 # logger = logging.getLogger('websockets')
 # logger.setLevel(logging.DEBUG)
@@ -173,6 +174,34 @@ def handle_ws_command(msg):
             api.exec_command(f"cg_centertime 2;varcommand displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
             time.sleep(1)
 
+# NEW: Handle connect action from server browser
+    if content['action'] == 'connect':
+        ip = content['value']
+        logging.info(f"[CONSOLE] CONNECT REQUEST to {ip}")
+
+        # Validate IP (consistent with twitch_commands.py)
+        result = servers.is_valid_ip(ip)
+        if not result['status']:
+            msg = result['message']
+            api.exec_command(f"cg_centertime 5;varcommand displaymessage 140 8 ^3{author} ^1{msg};")
+            logging.info(msg)
+            # Optionally send error back to extension via websocket (e.g., for UI feedback)
+            console.WS_Q.put(json.dumps({
+                'action': 'connect_error',
+                'message': msg
+            }))
+            return
+
+        # Proceed with connection
+        api.exec_command("say ^7Switching servers. ^3Farewell.")
+        serverstate.RECONNECTED_CHECK = True
+        serverstate.connect(ip, author)
+        # Optionally send success back to extension
+        console.WS_Q.put(json.dumps({
+            'action': 'connect_success',
+            'message': f"Connecting to {ip}"
+        }))
+        return
 
 def on_ws_message(msg):
     message = {}
