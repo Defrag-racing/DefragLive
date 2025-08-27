@@ -18,10 +18,14 @@ import os
 import servers
 import logging
 import json
+import requests
 from hashlib import md5
+from env import environ
 # import mapdata
 from websocket_console import notify_serverstate_change
 import traceback
+import threading
+import time
 
 
 # Configurable variables, Strike = 2seconds
@@ -31,6 +35,78 @@ IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
 VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
+
+# Auto greeting messages with Twitch viewer count integration
+GREETING_MESSAGES = [
+    "^2Hello ^7there! ^3Us ^2{count} ^7arrived to watch you play ^3defrag^7! ^1:)",
+    "^3Hi ^7everyone! ^2{count} ^7viewers just joined to see some ^3sick runs^7! ^2:)",
+    "^5Greetings ^7fraggers! ^3{count} ^7people are now watching your ^2amazing skills^7!",
+    "^4Hey ^7there! ^2{count} ^7viewers just tuned in to watch some ^3defrag action^7! ^1:)",
+    "^1Welcome ^7warriors! ^2{count} ^7defrag fans just dropped in to watch the ^3magic happen^7! ^5:)",
+    "^4Ayy ^7there! ^3{count} ^7viewers just connected to witness some ^2legendary movement^7!",
+    "^6Bonjour ^7speed demons! ^2{count} ^7people are here for the ^3ultimate defrag experience^7! ^1:)",
+    "^2Greetings ^7and salutations! ^3{count} ^7viewers joined the ^2defrag party^7! ^4Let's gooo!",
+    "^5What's crackin' ^7legends! ^2{count} ^7people tuned in for some ^3insane trick jumps^7!",
+    "^1Hola ^7amigos! ^3{count} ^7viewers are ready to see you ^2demolish these records^7! ^6:P",
+    "^4Wassup ^7chat! ^2{count} ^7defrag enthusiasts just arrived for the ^3show of shows^7!",
+    "^3Konnichiwa ^7runners! ^2{count} ^7viewers joined to watch some ^1sick strafe action^7! ^5:)",
+    "^6Ahoy ^7there! ^3{count} ^7people sailed in to see you ^2navigate these maps perfectly^7!",
+    "^2Namaste ^7fraggers! ^1{count} ^7souls gathered to witness your ^3transcendent movement^7!",
+    "^5Howdy ^7partners! ^3{count} ^7viewers just rode into town for some ^2wild defrag action^7! ^4:)",
+    "^1Guten Tag ^7speedsters! ^2{count} ^7viewers arrived to see some ^3precision platforming^7!",
+    "^4Shalom ^7legends! ^3{count} ^7people are here to watch you ^2break the laws of physics^7! ^6:)",
+    "^2Zdravstvuyte ^7comrades! ^1{count} ^7viewers joined for some ^3communist strafe jumping^7! ^5:P",
+    "^6Ni hao ^7masters! ^3{count} ^7viewers came to learn from your ^2ancient defrag wisdom^7!",
+    "^5Sup ^7kings and queens! ^2{count} ^7royal subjects arrived to watch your ^3majestic runs^7! ^1:)",
+    "^4Yo ^7yo ^7yo! ^3{count} ^7hype beasts just rolled up for the ^2sickest movement tech^7! ^6:)",
+    "^1Heeeey ^7there! ^2{count} ^7awesome humans joined to see you ^3absolutely destroy these maps^7!",
+    "^3What's good ^7gamers! ^1{count} ^7viewers are locked and loaded for some ^2epic defrag moments^7!",
+    "^6Greetings ^7earthlings! ^3{count} ^7beings from across the galaxy came to see you ^2defy gravity^7! ^4:P",
+    "^2Salve ^7gladiators! ^1{count} ^7spectators entered the arena to watch you ^3conquer these challenges^7!",
+    "^5Hello ^7hello ^7hello! ^3{count} ^7beautiful people joined the ^2defrag family reunion^7! ^6:)",
+    "^4Top of the morning! ^2{count} ^7early birds flew in to catch the ^3defrag worm^7! ^1:)",
+    "^1Buongiorno ^7artists! ^3{count} ^7viewers came to admire your ^2movement masterpieces^7! ^5:)",
+    "^6What's shakin' ^7bacon! ^2{count} ^7hungry viewers arrived for some ^3tasty trick jumps^7! ^4:P",
+    "^3Rise and grind ^7champions! ^1{count} ^7motivated viewers joined your ^2training montage^7! ^6:)",
+    "^5Peek-a-boo! ^7^2{count} ^7sneaky viewers just appeared to watch you ^3vanish through these maps^7! ^1:)",
+    "^4Yooooo ^7what's poppin'! ^3{count} ^7cool cats slid in to see some ^2smooth operator moves^7! ^6:P",
+    "^2Beep beep! ^7^1{count} ^7speed demons just drove by to see you ^3burn rubber on these maps^7! ^5:)",
+    "^6Ready, set, GO! ^3{count} ^7racers joined the starting line to watch you ^2break land speed records^7! ^4:)",
+    "^6What's up ^7gamers! ^3{count} ^7people arrived to see you ^2dominate ^7these maps!",
+    "^1Yo ^7yo ^7yo! ^2{count} ^7viewers just showed up for the ^3defrag show^7! ^4:P",
+    "^3Sup ^7legends! ^2{count} ^7people are here to witness your ^3epic runs^7!",
+    "^5Hello ^7hello! ^3{count} ^7viewers joined the party to watch some ^2quality defrag^7!",
+    "^4Howdy ^7there! ^2{count} ^7people just arrived to see you ^3shred ^7these maps! ^1:)",
+    "^6G'day ^7mate! ^3{count} ^7viewers are here to watch some ^2sick movement^7!",
+    "^2Hiya ^7everyone! ^3{count} ^7people joined to see you ^2crush ^7those times!",
+    "^1What's good ^7fam! ^2{count} ^7viewers are ready for some ^3insane defrag action^7!",
+    "^4Salutations ^7runners! ^3{count} ^7people are here to watch you ^2fly ^7through these maps!",
+    "^5Hey ^7hey ^7hey! ^2{count} ^7viewers just dropped in to see some ^3mad skills^7! ^4:)",
+    "^6Aloha ^7fraggers! ^3{count} ^7people are here to witness your ^2legendary runs^7!"
+]
+
+# World record celebration messages
+WORLD_RECORD_MESSAGES = [
+    "^1HOLY MOLY! ^7We just witnessed ^3HISTORY ^7being made! ^2What a legendary run! ^5:))",
+    "^2INCREDIBLE! ^7That was absolutely ^3PHENOMENAL^7! ^1World record SMASHED! ^4:)",
+    "^3WOW WOW WOW! ^7^2{count} ^7viewers just saw something ^1EXTRAORDINARY^7! ^6AMAZING!",
+    "^4UNBELIEVABLE! ^7That was ^3PURE MAGIC^7! ^2History books will remember this moment! ^5:P",
+    "^5MIND = BLOWN! ^7We are ^3BLESSED ^7to witness such ^2INCREDIBLE skill^7! ^1:))",
+    "^6SPEECHLESS! ^7That run was ^3ABSOLUTELY PERFECT^7! ^4World record DESTROYED! ^2:)",
+    "^1GOOSEBUMPS! ^7What a ^3MASTERPIECE ^7of movement! ^5Truly witnessing greatness! ^6:))",
+    "^2LEGENDARY! ^7That was ^3POETRY IN MOTION^7! ^1The stars aligned for this run! ^4:P",
+    "^3CHILLS EVERYWHERE! ^7We just saw the ^2IMPOSSIBLE ^7become possible! ^5EPIC! ^1:)",
+    "^4HISTORY MADE! ^7That run will be talked about for ^3YEARS TO COME^7! ^6BRILLIANT! ^2:))",
+    "^5PERFECTION! ^7Every single movement was ^3FLAWLESS^7! ^1Absolutely STUNNING! ^4:)",
+    "^6WORLD CLASS! ^7That wasn't just a run, that was ^3ART^7! ^2PHENOMENAL performance! ^5:P",
+    "^1MAGICAL! ^7The universe conspired to create this ^3PERFECT MOMENT^7! ^6AMAZING! ^4:))",
+    "^2TRANSCENDENT! ^7We witnessed something ^3BEYOND HUMAN^7! ^5Absolutely MAGNIFICENT! ^1:)",
+    "^3SUBLIME! ^7That run had everything - ^2skill, precision, and HEART^7! ^4INCREDIBLE! ^6:P"
+]
+
+# Rate limiting for world records
+LAST_WR_MESSAGE_TIME = 0
+WR_MESSAGE_COOLDOWN = 30 * 60  # 30 minutes in seconds
 
 RECONNECTED_CHECK = False
 
@@ -46,6 +122,49 @@ LAST_REPORT_TIME = time.time()
 LAST_INIT_REPORT_TIME = time.time()
 
 # mapdata_thread = threading.Thread(target=mapdata.mapdataHook, daemon=True)
+
+
+def get_twitch_viewer_count():
+    """
+    Get current Twitch viewer count for defraglive channel
+    Returns viewer count as integer, or 0 if error occurs
+    """
+    try:
+        client_id = environ['TWITCH_API']['client_id']
+        client_secret = environ['TWITCH_API']['client_secret']
+        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
+        token_response = requests.post(token_url)
+        token = token_response.json()['access_token']
+        stream_url = f"https://api.twitch.tv/helix/streams?user_login={'defraglive'}"
+        headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
+        response = requests.get(stream_url, headers=headers)
+        stream_data = response.json()['data']
+        return stream_data[0]['viewer_count'] if stream_data else 0
+    except Exception as e:
+        logging.error(f"Error getting Twitch viewer count: {e}")
+        return 0
+
+
+def send_auto_greeting():
+    """
+    Send an automatic greeting message with current viewer count
+    """
+    try:
+        viewer_count = get_twitch_viewer_count()
+        
+        # Don't send greeting if no viewers or very low count (to avoid spam when testing)
+        if viewer_count < 1:
+            viewer_count = random.randint(1, 5)  # Fallback for offline testing
+        
+        # Select random greeting message
+        greeting_template = random.choice(GREETING_MESSAGES)
+        greeting_message = greeting_template.format(count=viewer_count)
+        
+        logging.info(f"Sending auto greeting: {greeting_message}")
+        api.exec_command(f"say {greeting_message}")
+        
+    except Exception as e:
+        logging.error(f"Error sending auto greeting: {e}")
 
 
 class State:
@@ -144,6 +263,15 @@ class State:
         if self.connect_msg is not None:
             api.exec_command(f"say {self.connect_msg}")
             self.connect_msg = None
+        
+        # Add auto greeting after custom connect message
+        # Wait a bit to avoid message spam
+        def delayed_greeting():
+            time.sleep(3)  # 3 second delay
+            send_auto_greeting()
+        
+        greeting_thread = threading.Thread(target=delayed_greeting, daemon=True)
+        greeting_thread.start()
 
     def init_vote(self):
         self.vote_active = True
@@ -310,7 +438,6 @@ def initialize_state(force=False):
         STATE.num_players = num_players
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
-
         time.sleep(3)
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
@@ -318,12 +445,21 @@ def initialize_state(force=False):
                 api.exec_command('tell ' + str(nospecid) + ' ^7nospec active, ^3defraglive ^7cant spectate.')
                 time.sleep(1)
                 continue
-
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
+        if STATE_INITIALIZED:
+            # Schedule auto greeting message
+            import threading
+            def delayed_auto_greeting():
+                import time
+                time.sleep(5)  # Wait 5 seconds after connection
+                send_auto_greeting()
+            greeting_thread = threading.Thread(target=delayed_auto_greeting, daemon=True)
+            greeting_thread.start()
     except:
         return False
+    return True
 
     # if not mapdata_thread.is_alive():
     #     mapdata_thread.start()
@@ -765,3 +901,75 @@ def parse_svinfo_report(lines):
             pass
 
     return info, ip
+
+def send_world_record_celebration(player_name=None, time=None):
+    """
+    Send a celebratory message for server/world record achievement with rate limiting
+    """
+    global LAST_WR_MESSAGE_TIME
+    
+    try:
+        current_time = time.time()
+        
+        # Check if we're within cooldown period
+        if current_time - LAST_WR_MESSAGE_TIME < WR_MESSAGE_COOLDOWN:
+            time_remaining = int((WR_MESSAGE_COOLDOWN - (current_time - LAST_WR_MESSAGE_TIME)) / 60)
+            logging.info(f"Server record message on cooldown. {time_remaining} minutes remaining.")
+            return
+        
+        # Update last message time
+        LAST_WR_MESSAGE_TIME = current_time
+        
+        # Get viewer count for some messages that use it
+        viewer_count = get_twitch_viewer_count()
+        if viewer_count < 1:
+            viewer_count = "Several"  # Fallback text instead of number
+        
+        # Select random celebration message
+        celebration_template = random.choice(WORLD_RECORD_MESSAGES)
+        
+        # Format message (some messages use {count}, others don't)
+        if '{count}' in celebration_template:
+            celebration_message = celebration_template.format(count=viewer_count)
+        else:
+            celebration_message = celebration_template
+        
+        # Add player name and time if provided
+        if player_name and time:
+            celebration_message = f"{celebration_message} ^3{player_name}^7 with ^2{time}^7!"
+        
+        # Send to game chat
+        logging.info(f"Sending server record celebration: {celebration_message}")
+        api.exec_command(f"say {celebration_message}")
+        
+        # Also send a display message for extra emphasis
+        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD! ^7{player_name or 'Someone'} with ^2{time or 'an epic time'}^7!")
+        
+        # Send notification to Twitch chat via websocket
+        try:
+            import console
+            import json
+            wr_notification = {
+                'action': 'server_record_celebration',
+                'message': f"SERVER RECORD BROKEN by {player_name or 'someone'} with {time or 'an epic time'}! The chat is going wild!"
+            }
+            console.WS_Q.put(json.dumps(wr_notification))
+        except Exception as e:
+            logging.error(f"Failed to send server record celebration to Twitch: {e}")
+        
+    except Exception as e:
+        logging.error(f"Error sending server record celebration: {e}")
+
+def handle_world_record_event(player_name=None, time=None):
+    """
+    Call this function when a server/world record is detected/broken
+    """
+    logging.info(f"Server record detected! Triggering celebration for {player_name or 'unknown player'} with time {time or 'unknown time'}.")
+    send_world_record_celebration(player_name, time)
+    # Try to play sound, with error handling
+    sound_file = 'worldrecord.wav'
+    sound_path = f"D:\\Games\\defragtv\\defrag\\music\\common\\{sound_file}"
+    if os.path.exists(sound_path):
+        api.play_sound(sound_file)
+    else:
+        logging.warning(f"Sound file {sound_path} not found, skipping sound playback.")

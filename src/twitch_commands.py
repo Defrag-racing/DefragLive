@@ -6,6 +6,7 @@ import requests
 from env import environ
 import logging
 from mapdata import MapData
+from serverstate import send_auto_greeting
 
 USE_WHITELIST = 0
 
@@ -361,3 +362,8 @@ async def afk(ctx, author, args):
         
     else:
         await ctx.channel.send(f"{author}, usage: ?afk [reset|extend] or just ?afk to check status")
+
+async def greeting(ctx, author, args):
+    """Test command to trigger greeting manually"""
+    send_auto_greeting()
+    await ctx.channel.send("Manual greeting sent!")

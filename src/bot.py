@@ -82,6 +82,7 @@ TWITCH_CMDS = [
     ["server", "sv"],
     ["ip"],
     ["howmany"],
+    ["greeting"],
     ["afk"]
 ]
 
