@@ -13,7 +13,7 @@ import api
 import threading
 from hashlib import blake2b
 import logging
-
+import threading
 import dfcommands as cmd
 import filters
 import serverstate
@@ -213,7 +213,7 @@ def read(file_path: str):
 
             if line_data["type"] in ["PRINT",
                                      "SAY",
-                                     "ANNOUNCE",
+                                     "ANNOUNCE", 
                                      "RENAME",
                                      "CONNECTED",
                                      "DISCONNECTED",
@@ -221,8 +221,16 @@ def read(file_path: str):
                                      "JOINEDSPEC",
                                      "REACHEDFINISH",
                                      "YOURRANK"]:
-                CONSOLE_DISPLAY.append(line_data)
-                WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
+                # Add 2 second delay for better video synchronization
+                def delayed_message_display():
+                    time.sleep(2)
+                    CONSOLE_DISPLAY.append(line_data)
+                    WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
+                
+                # Use threading to avoid blocking the main console reading loop
+                delay_thread = threading.Thread(target=delayed_message_display)
+                delay_thread.daemon = True
+                delay_thread.start()
 
             # Check pause timeout after processing each line
             check_pause_timeout()
