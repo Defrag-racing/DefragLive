@@ -25,7 +25,67 @@ SPECIAL_NUMBERS = {
 
 
 def strip_q3_colors(value):
-    return re.sub(r'\^(X.{6}|.)', '', value)
+    # Updated to handle both numeric and alphabetic color codes
+    return re.sub(r'\^(X.{6}|[0-9a-z])', '', value)
+
+
+def extract_color_codes(text):
+    """Extract color codes and their positions from text"""
+    color_codes = []
+    # Updated regex to match both numeric and alphabetic color codes
+    color_regex = r'\^[0-9a-z]'
+    
+    for match in re.finditer(color_regex, text, re.IGNORECASE):
+        color_codes.append({
+            'code': match.group(0),
+            'position': match.start(),
+            'length': len(match.group(0))
+        })
+    
+    return color_codes
+
+
+def rebuild_with_colors(original_text, censored_clean_text):
+    """Rebuild censored text with original color codes intact"""
+    color_codes = extract_color_codes(original_text)
+    clean_original = strip_q3_colors(original_text)
+    
+    # If no censoring happened, return original
+    if clean_original == censored_clean_text:
+        return original_text
+    
+    # Build mapping of positions in clean text to positions in original text
+    result = ""
+    clean_idx = 0
+    orig_idx = 0
+    color_idx = 0
+    
+    while orig_idx < len(original_text) and clean_idx < len(censored_clean_text):
+        # Check if there's a color code at current original position
+        if (color_idx < len(color_codes) and 
+            color_codes[color_idx]['position'] == orig_idx):
+            # Add the color code to result
+            result += color_codes[color_idx]['code']
+            orig_idx += color_codes[color_idx]['length']
+            color_idx += 1
+        else:
+            # Add character from censored text
+            result += censored_clean_text[clean_idx]
+            clean_idx += 1
+            orig_idx += 1
+    
+    # Add any remaining characters from censored text
+    while clean_idx < len(censored_clean_text):
+        result += censored_clean_text[clean_idx]
+        clean_idx += 1
+    
+    # Add any remaining color codes at the end
+    while color_idx < len(color_codes):
+        if color_codes[color_idx]['position'] <= len(original_text):
+            result += color_codes[color_idx]['code']
+        color_idx += 1
+    
+    return result
 
 
 # replaces "w o r d" with "word"
@@ -105,12 +165,22 @@ def filter_line_data(data):
 
     if len(chat_automaton) > 0:
         if 'content' in data and data['content'] is not None:
+            # Store original content before filtering
+            original_content = data['content']
+            
             filtered_m = filter_message(data['content'])
 
             for i in range(1, 5):
                 filtered_m = filter_message(filtered_m)
 
-            data['content'] = filtered_m
+            # If filtering occurred, rebuild with color codes
+            clean_original = strip_q3_colors(original_content)
+            clean_filtered = strip_q3_colors(filtered_m)
+            
+            if clean_original != clean_filtered:
+                data['content'] = rebuild_with_colors(original_content, clean_filtered)
+            else:
+                data['content'] = filtered_m
 
     return data
 
@@ -156,6 +226,9 @@ def filter_capital_letters_in_message(msg):
 
 
 def filter_message(msg, separator=' ^7> '):
+    # Store original message for color code reconstruction
+    original_msg = msg
+    
     msg = filter_capital_letters_in_message(msg)
     msg = filter_numbers_in_message(msg)
 
