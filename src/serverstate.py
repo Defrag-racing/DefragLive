@@ -988,3 +988,40 @@ def handle_world_record_event(player_name=None, time=None):
         api.play_sound(sound_file)
     else:
         logging.warning(f"Sound file {sound_path} not found, skipping sound playback.")
+
+def get_colored_player_names():
+    """Fetch colored player names from defrag.racing API"""
+    try:
+        import requests
+        current_ip = STATE.ip if STATE and hasattr(STATE, 'ip') else None
+        if not current_ip:
+            return {}
+            
+        # Add default port if not present
+        api_ip = current_ip if ':' in current_ip else f"{current_ip}:27960"
+        
+        url = 'https://defrag.racing/servers/json'
+        response = requests.get(url, timeout=5)
+        servers_data = response.json()
+        
+        # Look for our server in active servers
+        if 'active' in servers_data and api_ip in servers_data['active']:
+            server_data = servers_data['active'][api_ip]
+            colored_names = {}
+            
+            if 'players' in server_data:
+                for player_id, player_data in server_data['players'].items():
+                    if isinstance(player_data, dict) and 'name' in player_data:
+                        # Map clean name to colored name
+                        clean_name = remove_color_codes(player_data['name'])
+                        colored_names[clean_name.lower()] = player_data['name']
+            return colored_names
+    except Exception as e:
+        logging.error(f"Error fetching colored names: {e}")
+    
+    return {}
+
+def remove_color_codes(text):
+    """Remove Quake 3 color codes from text for comparison"""
+    import re
+    return re.sub(r'\^.', '', text)

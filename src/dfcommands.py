@@ -123,33 +123,36 @@ def handle_spectate(line_data):
     global SPECTATE_REQUESTS, SPECTATE_COOLDOWN
     
     try:
-        # Parse the message to get the target player name
-        message_parts = line_data['content'].split()
-        
-        if len(message_parts) < 2:
-            # No target specified, show help
-            api.exec_command("say ^7Usage: ^3?spectate <playername> ^7- send a polite spectate request")
-            return None
-        
-        target_player_name = message_parts[1]
-        requester = line_data["author"]
-        current_time = time.time()
-        
-        # Check if we have a valid serverstate
-        if not hasattr(serverstate, 'STATE') or serverstate.STATE is None:
-            api.exec_command("say ^7Server state not available, try again later.")
-            return None
-        
-        # Find the target player in the current server
+        # Check if we have a player object passed from websocket handler
         target_player = None
-        for player in serverstate.STATE.players:
-            # Remove color codes for comparison
-            clean_player_name = remove_color_codes(player.n).lower()
-            clean_target_name = target_player_name.lower()
+        if 'target_player_obj' in line_data:
+            target_player = line_data['target_player_obj']
+            target_player_name = remove_color_codes(target_player.n)  # For display/logging
+        else:
+            # Parse the message to get the target player name (original behavior)
+            message_parts = line_data['content'].split()
             
-            if clean_player_name == clean_target_name or clean_target_name in clean_player_name:
-                target_player = player
-                break
+            if len(message_parts) < 2:
+                # No target specified, show help
+                api.exec_command("say ^7Usage: ^3?spectate <playername> ^7- send a polite spectate request")
+                return None
+            
+            target_player_name = message_parts[1]
+            
+            # Check if we have a valid serverstate
+            if not hasattr(serverstate, 'STATE') or serverstate.STATE is None:
+                api.exec_command("say ^7Server state not available, try again later.")
+                return None
+            
+            # Find the target player in the current server
+            for player in serverstate.STATE.players:
+                # Remove color codes for comparison
+                clean_player_name = remove_color_codes(player.n).lower()
+                clean_target_name = target_player_name.lower()
+                
+                if clean_player_name == clean_target_name or clean_target_name in clean_player_name:
+                    target_player = player
+                    break
         
         if not target_player:
             api.exec_command(f"say ^7Player '^3{target_player_name}^7' not found on this server.")
@@ -160,8 +163,17 @@ def handle_spectate(line_data):
             api.exec_command(f"say ^3{target_player.n} ^7already allows spectating! Use the extension to spectate them.")
             return None
         
-        # Check cooldown for this specific player
-        cooldown_key = f"{target_player.n}_{requester}"
+        requester = line_data["author"]
+        current_time = time.time()
+        
+        # Get colored names from API
+        colored_names = serverstate.get_colored_player_names()
+        
+        # Try to find colored version of player name
+        clean_target_name = remove_color_codes(target_player.n).lower()
+        colored_name = colored_names.get(clean_target_name, target_player.n)
+        # Check cooldown for this specific player (use clean name for cooldown key)
+        cooldown_key = f"{clean_target_name}_{requester}"
         if cooldown_key in SPECTATE_REQUESTS:
             time_since_last = current_time - SPECTATE_REQUESTS[cooldown_key]
             if time_since_last < SPECTATE_COOLDOWN:
@@ -172,19 +184,14 @@ def handle_spectate(line_data):
         # Update cooldown tracker
         SPECTATE_REQUESTS[cooldown_key] = current_time
         
-        # Select random message and replace placeholder
+        # Select random message and replace placeholder with colored name
         message_template = random.choice(SPECTATE_REQUEST_MESSAGES)
-        
-        # Debug logging to see what data we're working with
-        logging.info(f"Player name with colors: {repr(target_player.n)}")
-        spectate_message = message_template.replace('{PLAYERNAME}', target_player.n)
-        logging.info(f"Final message: {repr(spectate_message)}")
-        
-        # Send the request message
+        spectate_message = message_template.replace('{PLAYERNAME}', f"{colored_name}^7")        
+        # Send the request message with colored name
         api.exec_command(f"say ^3{requester} ^7asks: {spectate_message}")
         
-        # Log the request
-        logging.info(f"Spectate request sent by {requester} to {target_player.n}: {spectate_message}")
+        # Log the request (use clean name for logging clarity)
+        logging.info(f"Spectate request sent by {requester} to {clean_target_name}: {spectate_message}")
         
         # Clean up old cooldown entries (prevent memory buildup)
         cleanup_old_requests(current_time)
@@ -192,7 +199,6 @@ def handle_spectate(line_data):
     except Exception as e:
         logging.error(f"Error in handle_spectate: {e}")
         api.exec_command(f"say ^7Error processing spectate request. Try ^3?help ^7for available commands.")
-
 
 def handle_stonk(line_data):
     try:

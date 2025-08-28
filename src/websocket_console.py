@@ -179,12 +179,35 @@ def handle_ws_command(msg):
         player_name = content['value']
         logging.info(f"[CONSOLE] SPECTATE REQUEST for player: {player_name}")
         
-        # Create a fake line_data structure similar to what dfcommands expects
-        fake_line_data = {
-            'author': author,
-            'content': f"?spectate {player_name}",
-            'type': 'EXT_COMMAND'
-        }
+        # Find the original player object with color codes intact
+        target_player = None
+        if hasattr(serverstate, 'STATE') and serverstate.STATE is not None:
+            for player in serverstate.STATE.players:
+                # Remove color codes for comparison
+                clean_player_name = remove_color_codes(player.n).lower()
+                clean_target_name = remove_color_codes(player_name).lower()
+                
+                if clean_player_name == clean_target_name or clean_target_name in clean_player_name:
+                    target_player = player
+                    break
+        
+        if target_player:
+            # Use the original name with colors instead of the filtered one from extension
+            original_name_with_colors = target_player.n            
+            # Create a fake line_data structure but use original name
+            fake_line_data = {
+                'author': author,
+                'content': f"?spectate {original_name_with_colors}",
+                'type': 'EXT_COMMAND',
+                'target_player_obj': target_player  # Pass the actual player object
+            }
+        else:
+            # Fallback to original behavior if player not found
+            fake_line_data = {
+                'author': author,
+                'content': f"?spectate {player_name}",
+                'type': 'EXT_COMMAND'
+            }
         
         # Import and call the spectate handler
         import dfcommands
@@ -218,6 +241,12 @@ def handle_ws_command(msg):
             'message': f"Connecting to {ip}"
         }))
         return
+
+
+def remove_color_codes(text):
+    """Remove Quake 3 color codes from text for comparison"""
+    import re
+    return re.sub(r'\^.', '', text)
 
 def on_ws_message(msg):
     message = {}
