@@ -128,8 +128,15 @@ def save_serverstate_to_file():
         if STATE and hasattr(STATE, 'players'):
             import websocket_console
             import json
+            import os
+            
+            # Use storage directory for runtime data
+            storage_dir = os.path.join(os.path.dirname(__file__), '..', 'storage')
+            os.makedirs(storage_dir, exist_ok=True)
+            filepath = os.path.join(storage_dir, 'serverstate.json')
+            
             data = websocket_console.serverstate_to_json()
-            with open('serverstate.json', 'w') as f:
+            with open(filepath, 'w') as f:
                 json.dump(data, f)
     except Exception as e:
         logging.error(f"Failed to save serverstate: {e}")
