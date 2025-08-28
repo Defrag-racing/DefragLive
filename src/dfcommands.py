@@ -174,7 +174,11 @@ def handle_spectate(line_data):
         
         # Select random message and replace placeholder
         message_template = random.choice(SPECTATE_REQUEST_MESSAGES)
+        
+        # Debug logging to see what data we're working with
+        logging.info(f"Player name with colors: {repr(target_player.n)}")
         spectate_message = message_template.replace('{PLAYERNAME}', target_player.n)
+        logging.info(f"Final message: {repr(spectate_message)}")
         
         # Send the request message
         api.exec_command(f"say ^3{requester} ^7asks: {spectate_message}")

@@ -123,6 +123,16 @@ LAST_INIT_REPORT_TIME = time.time()
 
 # mapdata_thread = threading.Thread(target=mapdata.mapdataHook, daemon=True)
 
+def save_serverstate_to_file():
+    try:
+        if STATE and hasattr(STATE, 'players'):
+            import websocket_console
+            import json
+            data = websocket_console.serverstate_to_json()
+            with open('serverstate.json', 'w') as f:
+                json.dump(data, f)
+    except Exception as e:
+        logging.error(f"Failed to save serverstate: {e}")
 
 def get_twitch_viewer_count():
     """
@@ -340,6 +350,11 @@ def start():
             # Only refresh the STATE object if new data has been read and if state is not paused
             while not new_report_exists(config.INITIAL_REPORT_P) and not PAUSE_STATE:
                 time.sleep(2)
+
+                try:
+                    save_serverstate_to_file()
+                except Exception as e:
+                    logging.error(f"Error saving serverstate to file: {e}")
 
                 if not PAUSE_STATE:
                     api.exec_command("varmath color2 = $chsinfo(152);"  # Store inputs in color2
