@@ -5,7 +5,33 @@ import requests
 from env import environ
 import serverstate
 import logging
-supported_commands = ["nospec", "info", "help", "howmany", "clear", "discord", "whoisthebest", "stonk", "f1", "f2"]
+import time
+import random
+
+supported_commands = ["nospec", "info", "help", "howmany", "clear", "discord", "whoisthebest", "stonk", "f1", "f2", "spectate"]
+
+# Spectate request messages - similar to serverstate.py greeting messages
+SPECTATE_REQUEST_MESSAGES = [
+    "please {PLAYERNAME} can we spectate your awesome skill in action?",
+    "hey {PLAYERNAME}, would you mind sharing your epic gameplay with us?",
+    "{PLAYERNAME}, we'd love to watch you dominate! Mind if we spectate?",
+    "yo {PLAYERNAME}, can you show us how it's done? Please allow spectating!",
+    "{PLAYERNAME}, your skills are legendary! Can we watch and learn?",
+    "please {PLAYERNAME}, let us witness your mastery in action!",
+    "{PLAYERNAME}, we're dying to see your techniques! Spectating please?",
+    "hey {PLAYERNAME}, mind if we watch you work your magic?",
+    "{PLAYERNAME}, share the knowledge! Can we spectate your run?",
+    "please {PLAYERNAME}, let us learn from the master! Allow spectating?",
+    "{PLAYERNAME}, the viewers are excited to see your moves!",
+    "hey {PLAYERNAME}, would you consider letting us spectate your epic runs?",
+    "{PLAYERNAME}, we promise to cheer you on if you let us watch!",
+    "yo {PLAYERNAME}, the chat wants to see you in action! Spectating?",
+    "{PLAYERNAME}, your gameplay is too good to miss! Can we watch?"
+]
+
+# Track spectate requests per player to prevent spam
+SPECTATE_REQUESTS = {}  # player_name -> last_request_time
+SPECTATE_COOLDOWN = 30  # 30 seconds between requests per player
 
 
 def scan_for_command(message):
@@ -23,7 +49,7 @@ def scan_for_command(message):
 # The following are all the handler functions. They each take in line_data and return None
 
 def handle_help(line_data):
-    reply_string = "^7Current commands are ^3?^7nospec, ^3?^7info, ^3?^7help, ^3?^7clear, ^3?^7discord and ^3?^7howmany"
+    reply_string = "^7Current commands are ^3?^7nospec, ^3?^7info, ^3?^7help, ^3?^7clear, ^3?^7discord, ^3?^7howmany and ^3?^7spectate"
     api.exec_command(f"say {reply_string}")
     return None
 
@@ -88,6 +114,82 @@ def handle_discord(line_data):
     return None
 
 
+def handle_spectate(line_data):
+    """
+    Handle spectate requests from players
+    Usage: ?spectate <playername> - sends a polite request to the named player
+           ?spectate - shows help message
+    """
+    global SPECTATE_REQUESTS, SPECTATE_COOLDOWN
+    
+    try:
+        # Parse the message to get the target player name
+        message_parts = line_data['content'].split()
+        
+        if len(message_parts) < 2:
+            # No target specified, show help
+            api.exec_command("say ^7Usage: ^3?spectate <playername> ^7- send a polite spectate request")
+            return None
+        
+        target_player_name = message_parts[1]
+        requester = line_data["author"]
+        current_time = time.time()
+        
+        # Check if we have a valid serverstate
+        if not hasattr(serverstate, 'STATE') or serverstate.STATE is None:
+            api.exec_command("say ^7Server state not available, try again later.")
+            return None
+        
+        # Find the target player in the current server
+        target_player = None
+        for player in serverstate.STATE.players:
+            # Remove color codes for comparison
+            clean_player_name = remove_color_codes(player.n).lower()
+            clean_target_name = target_player_name.lower()
+            
+            if clean_player_name == clean_target_name or clean_target_name in clean_player_name:
+                target_player = player
+                break
+        
+        if not target_player:
+            api.exec_command(f"say ^7Player '^3{target_player_name}^7' not found on this server.")
+            return None
+        
+        # Check if player has nospec enabled
+        if target_player.nospec != 1:
+            api.exec_command(f"say ^3{target_player.n} ^7already allows spectating! Use the extension to spectate them.")
+            return None
+        
+        # Check cooldown for this specific player
+        cooldown_key = f"{target_player.n}_{requester}"
+        if cooldown_key in SPECTATE_REQUESTS:
+            time_since_last = current_time - SPECTATE_REQUESTS[cooldown_key]
+            if time_since_last < SPECTATE_COOLDOWN:
+                remaining_time = int(SPECTATE_COOLDOWN - time_since_last)
+                api.exec_command(f"say ^3{requester}^7, please wait ^3{remaining_time}s ^7before requesting again.")
+                return None
+        
+        # Update cooldown tracker
+        SPECTATE_REQUESTS[cooldown_key] = current_time
+        
+        # Select random message and replace placeholder
+        message_template = random.choice(SPECTATE_REQUEST_MESSAGES)
+        spectate_message = message_template.replace('{PLAYERNAME}', target_player.n)
+        
+        # Send the request message
+        api.exec_command(f"say ^3{requester} ^7asks: {spectate_message}")
+        
+        # Log the request
+        logging.info(f"Spectate request sent by {requester} to {target_player.n}: {spectate_message}")
+        
+        # Clean up old cooldown entries (prevent memory buildup)
+        cleanup_old_requests(current_time)
+        
+    except Exception as e:
+        logging.error(f"Error in handle_spectate: {e}")
+        api.exec_command(f"say ^7Error processing spectate request. Try ^3?help ^7for available commands.")
+
+
 def handle_stonk(line_data):
     try:
         line_list = line_data['content'].split()
@@ -114,3 +216,22 @@ def handle_stonk(line_data):
     except:
         reply_string = "Invalid input. Usage: ?stonk <symbol>"
     return api.exec_command(f"say {reply_string}")
+
+
+def remove_color_codes(text):
+    """Remove Quake 3 color codes from text for comparison"""
+    import re
+    return re.sub(r'\^.', '', text)
+
+
+def cleanup_old_requests(current_time):
+    """Clean up old spectate request entries to prevent memory buildup"""
+    global SPECTATE_REQUESTS, SPECTATE_COOLDOWN
+    
+    keys_to_remove = []
+    for key, timestamp in SPECTATE_REQUESTS.items():
+        if current_time - timestamp > SPECTATE_COOLDOWN * 2:  # Clean up entries older than 2x cooldown
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        del SPECTATE_REQUESTS[key]
