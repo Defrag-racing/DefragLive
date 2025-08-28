@@ -173,8 +173,24 @@ def handle_ws_command(msg):
             serverstate.spectate_player(id)
             api.exec_command(f"cg_centertime 2;varcommand displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
             time.sleep(1)
+            return
 
-# NEW: Handle connect action from server browser
+    if content['action'] == 'spectate_request':
+        player_name = content['value']
+        logging.info(f"[CONSOLE] SPECTATE REQUEST for player: {player_name}")
+        
+        # Create a fake line_data structure similar to what dfcommands expects
+        fake_line_data = {
+            'author': author,
+            'content': f"?spectate {player_name}",
+            'type': 'EXT_COMMAND'
+        }
+        
+        # Import and call the spectate handler
+        import dfcommands
+        dfcommands.handle_spectate(fake_line_data)
+        return
+
     if content['action'] == 'connect':
         ip = content['value']
         logging.info(f"[CONSOLE] CONNECT REQUEST to {ip}")
