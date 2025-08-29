@@ -204,31 +204,26 @@ def read(file_path: str):
                 LOG = LOG[1000:]
 
             # if line_data.pop("command") is not None:
+            # if line_data.pop("command") is not None:
             if 'command' in line_data and line_data['command'] is not None:
-                command = line_data['command']
-                handle_command = getattr(cmd, f"handle_{command}")
-                try:
-                    handle_command(line_data)
-                except Exception as e:
-                    logging.info(f"Error occurred for in-game command {command}: {e}")
+               command = line_data['command']
+               handle_command = getattr(cmd, f"handle_{command}")
+               try:
+                   handle_command(line_data)
+               except Exception as e:
+                   logging.info(f"Error occurred for in-game command {command}: {e}")
             if ("report written to system/reports/" in line_data["content"]):
-                # Skip system messages entirely
-                pass
+               # Skip system messages entirely
+               pass
             elif line_data["type"] in ["PRINT", "SAY", "ANNOUNCE", "RENAME", "CONNECTED", 
-                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
-                                       "REACHEDFINISH", "YOURRANK"]:
-                
-                # Only delay player messages (SAY, REACHEDFINISH), send others immediately
-                if line_data["type"] in ["SAY", "REACHEDFINISH"]:
-                    # Add to delay queue
-                    DELAYED_MESSAGE_QUEUE.append({
-                        'message': line_data,
-                        'send_time': time.time() + 2  # 2 second delay
-                    })
-                else:
-                    # Send system messages immediately
-                    CONSOLE_DISPLAY.append(line_data)
-                    WS_Q.put(json.dumps({'action': 'message', 'message': line_data}))
+                                      "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
+                                      "REACHEDFINISH", "YOURRANK"]:
+               
+               # Delay ALL messages by 2 seconds
+               DELAYED_MESSAGE_QUEUE.append({
+                   'message': line_data,
+                   'send_time': time.time() + 2  # 2 second delay for everything
+               })
 
             # Check pause timeout after processing each line
             check_pause_timeout()
