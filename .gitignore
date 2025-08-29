@@ -143,3 +143,4 @@ src/test.py
 src/console - backup.py
 src/bot_pid.txt
 src/restart_log.txt
+storage/serverstate.json
