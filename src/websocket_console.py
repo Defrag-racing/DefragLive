@@ -20,13 +20,12 @@ def serverstate_to_json():
     data = {
         'bot_id': serverstate.STATE.bot_id,
         'current_player_id': serverstate.STATE.current_player_id,
-        # 'idle_counter': serverstate.STATE.idle_counter,
-        # 'afk_counter': serverstate.STATE.afk_counter,
-        # 'afk_ids': serverstate.STATE.afk_ids,
         'mapname': serverstate.STATE.mapname,
         'df_promode': serverstate.STATE.df_promode,
         'defrag_gametype': serverstate.STATE.defrag_gametype,
         'num_players': serverstate.STATE.num_players,
+        'ip': serverstate.STATE.ip,           # ADD THIS LINE
+        'hostname': serverstate.STATE.hostname,  # ADD THIS LINE
         'players': {},
     }
 
