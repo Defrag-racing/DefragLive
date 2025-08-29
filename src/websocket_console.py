@@ -242,6 +242,43 @@ def handle_ws_command(msg):
         }))
         return
 
+    if content['action'] == 'afk_control':
+        command = content['command']  # 'reset' or 'extend'
+        logging.info(f"[CONSOLE] AFK CONTROL REQUEST: {command}")
+        
+        # Import the afk function from twitch_commands to reuse the logic
+        import twitch_commands
+        import asyncio
+        
+        # Create a mock context object for the async function
+        class MockContext:
+            class MockChannel:
+                async def send(self, message):
+                    pass  # Do nothing - we don't want Twitch chat output from buttons
+            channel = MockChannel()
+        
+        # Call the existing afk function with the appropriate arguments
+        mock_ctx = MockContext()
+        args = [command] if command in ['reset', 'extend'] else []
+        
+        # Run the async function in a thread to avoid blocking
+        import threading
+        def run_afk_command():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(twitch_commands.afk(mock_ctx, author, args))
+            except Exception as e:
+                logging.error(f"Error running AFK command: {e}")
+            finally:
+                loop.close()
+        
+        thread = threading.Thread(target=run_afk_command)
+        thread.daemon = True
+        thread.start()
+        
+        return
+
 
 def remove_color_codes(text):
     """Remove Quake 3 color codes from text for comparison"""
