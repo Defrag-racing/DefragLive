@@ -184,6 +184,12 @@ def read(file_path: str):
         time.sleep(1)
 
     STOP_CONSOLE = False
+
+    # Start the delay processor thread here, after STOP_CONSOLE = False
+    delay_processor = threading.Thread(target=process_delayed_messages)
+    delay_processor.daemon = True
+    delay_processor.start()
+
     with open(file_path, 'r') as log:
         new_lines = read_tail(log)
 
@@ -643,8 +649,3 @@ def process_delayed_messages():
         DELAYED_MESSAGE_QUEUE = remaining_messages
         
         time.sleep(0.1)  # Check every 100ms
-
-# Start the delay processor thread (add this in the read() function after STOP_CONSOLE = False)
-delay_processor = threading.Thread(target=process_delayed_messages)
-delay_processor.daemon = True
-delay_processor.start()
