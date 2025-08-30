@@ -309,17 +309,14 @@ def read(file_path: str):
                pass
             elif line_data["type"] in ["PRINT", "SAY", "ANNOUNCE", "RENAME", "CONNECTED", 
                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
-                                      "REACHEDFINISH", "YOURRANK", "MAP_ERROR"]:
-               
-               # ADD THIS DEBUG LOGGING
-               if "Rankings on" in line_data["content"] or "-----" in line_data["content"] or (". ^7" in line_data["content"] and "^3" in line_data["content"]):
-                   logging.info(f"[DEBUG] Adding !top result to queue: type={line_data['type']}, content={line_data['content'][:50]}...")
-               
-               # Delay ALL messages by 2 seconds
-               DELAYED_MESSAGE_QUEUE.append({
-                   'message': line_data,
-                   'send_time': time.time() + 2  # 2 second delay for everything
-               })
+                                      "REACHEDFINISH", "YOURRANK", "MAP_ERROR", "MAP_COUNTDOWN",
+                                      "SERVERRECORD", "FIRSTTIME", "LOGGEDIN"]:
+                
+                # Delay ALL messages by 2 seconds
+                DELAYED_MESSAGE_QUEUE.append({
+                    'message': line_data,
+                    'send_time': time.time() + 2  # 2 second delay for everything
+                })
 
             # Check pause timeout after processing each line
             check_pause_timeout()
@@ -367,11 +364,6 @@ def process_line(line):
         "finished R_Init"
     ]) or line.strip() == "----------------------":
         return line_data  # Return as MISC type (won't be queued)
-
-    # ADD THIS DEBUG LOGGING
-    if "Rankings on" in line or "-----" in line or ". ^7" in line:
-        logging.info(f"[DEBUG] Processing !top line: {line}")
-        logging.info(f"[DEBUG] Initial line_data type: {line_data['type']}")
 
     # you can add more errors like this: ['error1', 'error2', 'error3']
     errors = ['ERROR: Unhandled exception cought']
@@ -547,15 +539,28 @@ def process_line(line):
 
         def parse_top_results(command):
             # Check for !top result patterns
-            if ("Rankings on" in command or 
-                "-----" in command or 
-                (command.startswith("^3  ") and ". ^7" in command) or  # numbered rankings
-                command.strip() == ""):  # empty lines in !top output
-                
+            if "Rankings on" in command:
                 line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
                 line_data["type"] = "PRINT"
                 line_data["author"] = None
                 line_data["content"] = command
+            elif "-----" in command:
+                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
+                line_data["type"] = "PRINT"
+                line_data["author"] = None
+                line_data["content"] = command
+            elif (command.startswith("^3  ") and ". ^7" in command and "reached the finish line" not in command):
+                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
+                line_data["type"] = "PRINT"
+                line_data["author"] = None
+                line_data["content"] = command
+            elif command.strip() == "":
+                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
+                line_data["type"] = "PRINT"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
 
         def parse_scores(command):
             # SCORES
@@ -623,6 +628,33 @@ def process_line(line):
             else:
                 raise Exception()
 
+        def parse_server_record(command):
+            if ' broke the server record with ' in command:
+                line_data["id"] = message_to_id(f"SERVERRECORD_{command}")
+                line_data["type"] = "SERVERRECORD"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_first_time(command):
+            if ' sets the first time with ' in command:
+                line_data["id"] = message_to_id(f"FIRSTTIME_{command}")
+                line_data["type"] = "FIRSTTIME"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
+        def parse_logged_in(command):
+            if ', you are now logged in as ' in command:
+                line_data["id"] = message_to_id(f"LOGGEDIN_{command}")
+                line_data["type"] = "LOGGEDIN"
+                line_data["author"] = None
+                line_data["content"] = command
+            else:
+                raise Exception()
+
         def parse_your_rank(command):
             if ' you are now rank ' in command:
                 line_data["id"] = message_to_id(f"YOURRANK_{command}")
@@ -632,8 +664,7 @@ def process_line(line):
             else:
                 raise Exception()
 
-        for fun in [
-                    parse_chat_message,
+        for fun in [parse_chat_message,
                     parse_chat_announce,
                     parse_print,
                     parse_top_results,
@@ -644,6 +675,9 @@ def process_line(line):
                     parse_entered_game,
                     parse_joined_spec,
                     parse_reached_finish,
+                    parse_server_record,
+                    parse_first_time,
+                    parse_logged_in,
                     parse_your_rank]:
             try:
                 fun(line)
@@ -653,12 +687,8 @@ def process_line(line):
     except:
         return line_data
 
-    if "Rankings on" in line or "-----" in line or ". ^7" in line:
-        logging.info(f"[DEBUG] Final line_data: type={line_data['type']}, content={line_data['content'][:50]}...")
-    
     PREVIOUS_LINE = line_data
     return line_data
-
 # HELPER
 def handle_fuzzy(r, fuzzy):
     if not r:
