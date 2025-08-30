@@ -666,8 +666,8 @@ def process_line(line):
 
         for fun in [parse_chat_message,
                     parse_chat_announce,
-                    parse_print,
                     parse_top_results,
+                    parse_print,
                     parse_scores,
                     parse_rename,
                     parse_connected,
