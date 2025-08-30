@@ -414,13 +414,23 @@ def process_line(line):
                 handle_error_with_delay(line, ERROR_FILTERS[line])
 
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
-            """
-                Maybe we can also add a display message with the player name and/or the record
-                #playerName = line[:line.index(' broke the server record with')]
-                #playerRecord = line[line.index(' broke the server record with') + len(' broke the server record with'):]
-                #api.display_message("{playerName} broke the record with {playerRecord}")
-            """
-            api.play_sound("worldrecord.wav")
+            # Extract player name and time from the server record message
+            try:
+                # Parse the line to extract player name and time
+                # Format: "PlayerName broke the server record with 12:496 [other info]"
+                player_name = line[:line.index(' broke the server record with')]
+                record_part = line[line.index(' broke the server record with') + len(' broke the server record with'):]
+                # Extract just the time (before any additional info in brackets or spaces)
+                record_time = record_part.split()[0] if record_part else "unknown time"
+                
+                # Trigger celebration from serverstate.py
+                serverstate.handle_world_record_event(player_name, record_time)
+                
+            except Exception as e:
+                logging.error(f"Error parsing server record message: {e}")
+                # Fallback - still play sound and trigger celebration without specific details
+                api.play_sound("worldrecord.wav")
+                serverstate.handle_world_record_event()
 
         if 'called a vote:' in line and is_server_msg(line, 'called a vote:'):
             logging.info("Vote detected.")

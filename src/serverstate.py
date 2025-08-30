@@ -947,14 +947,14 @@ def parse_svinfo_report(lines):
 
     return info, ip
 
-def send_world_record_celebration(player_name=None, time=None):
+def send_world_record_celebration(player_name=None, record_time=None):
     """
     Send a celebratory message for server/world record achievement with rate limiting
     """
     global LAST_WR_MESSAGE_TIME
     
     try:
-        current_time = time.time()
+        current_time = time.time()  # Now this works correctly
         
         # Check if we're within cooldown period
         if current_time - LAST_WR_MESSAGE_TIME < WR_MESSAGE_COOLDOWN:
@@ -980,15 +980,15 @@ def send_world_record_celebration(player_name=None, time=None):
             celebration_message = celebration_template
         
         # Add player name and time if provided
-        if player_name and time:
-            celebration_message = f"{celebration_message} ^3{player_name}^7 with ^2{time}^7!"
+        if player_name and record_time:
+            celebration_message = f"{celebration_message} ^3{player_name}^7 with ^2{record_time}^7!"
         
         # Send to game chat
         logging.info(f"Sending server record celebration: {celebration_message}")
         api.exec_command(f"say {celebration_message}")
         
         # Also send a display message for extra emphasis
-        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD! ^7{player_name or 'Someone'} with ^2{time or 'an epic time'}^7!")
+        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD! ^7{player_name or 'Someone'} with ^2{record_time or 'an epic time'}^7!")
         
         # Send notification to Twitch chat via websocket
         try:
@@ -996,7 +996,7 @@ def send_world_record_celebration(player_name=None, time=None):
             import json
             wr_notification = {
                 'action': 'server_record_celebration',
-                'message': f"SERVER RECORD BROKEN by {player_name or 'someone'} with {time or 'an epic time'}! The chat is going wild!"
+                'message': f"SERVER RECORD BROKEN by {player_name or 'someone'} with {record_time or 'an epic time'}! The chat is going wild!"
             }
             console.WS_Q.put(json.dumps(wr_notification))
         except Exception as e:
@@ -1005,12 +1005,12 @@ def send_world_record_celebration(player_name=None, time=None):
     except Exception as e:
         logging.error(f"Error sending server record celebration: {e}")
 
-def handle_world_record_event(player_name=None, time=None):
+def handle_world_record_event(player_name=None, record_time=None):
     """
     Call this function when a server/world record is detected/broken
     """
-    logging.info(f"Server record detected! Triggering celebration for {player_name or 'unknown player'} with time {time or 'unknown time'}.")
-    send_world_record_celebration(player_name, time)
+    logging.info(f"Server record detected! Triggering celebration for {player_name or 'unknown player'} with time {record_time or 'unknown time'}.")
+    send_world_record_celebration(player_name, record_time)
     # Try to play sound, with error handling
     sound_file = 'worldrecord.wav'
     sound_path = f"D:\\Games\\defragtv\\defrag\\music\\common\\{sound_file}"
