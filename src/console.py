@@ -28,6 +28,7 @@ PREVIOUS_LINE = ''
 LAST_ERROR_TIME = None
 PAUSE_STATE_START_TIME = None  # Add this global variable
 DELAYED_MESSAGE_QUEUE = []
+MAP_ERROR_COUNTDOWN_ACTIVE = False
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -36,9 +37,61 @@ ERROR_FILTERS = {
     "Incorrect challenge, please reconnect": "RECONNECT",
     "ERROR: CL_ParseServerMessage: read past end of server message": "RECONNECT",
     "^0^7D^6e^7Frag^6.^7LIVE^0/^7 was kicked": "RECONNECT",
+    "ERROR: CM_LoadMap: couldn't load maps/": "MAP_ERROR",
     "Server connection timed out": "RECONNECT"
 }
 
+def handle_map_error_with_countdown():
+    """
+    Handle map loading error with 60-second countdown and auto-reconnect
+    """
+    global MAP_ERROR_COUNTDOWN_ACTIVE
+    
+    if MAP_ERROR_COUNTDOWN_ACTIVE:
+        return  # Already running countdown
+    
+    MAP_ERROR_COUNTDOWN_ACTIVE = True
+    logging.info("Map loading error detected. Starting 60-second countdown...")
+    
+    def countdown_and_reconnect():
+        global MAP_ERROR_COUNTDOWN_ACTIVE
+        
+        try:
+            for seconds_left in range(60, 0, -5):  # Count down from 60 in 5-second intervals
+                api.exec_command(f"cg_centertime 6;displaymessage 140 10 ^1Map update required. ^7Reconnecting in ^3{seconds_left} ^7seconds...")
+                logging.info(f"Map error countdown: {seconds_left} seconds remaining")
+                time.sleep(5)
+            
+            # Final message and reconnect
+            api.exec_command(f"cg_centertime 3;displaymessage 140 10 ^3Reconnecting now...")
+            logging.info("Map error countdown complete. Executing reconnect...")
+            
+            # Wait a moment then reconnect
+            time.sleep(2)
+            
+            # Use the proper serverstate reconnect function
+            if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
+                current_ip = serverstate.STATE.ip
+                if current_ip:
+                    logging.info(f"Reconnecting to current server after map error: {current_ip}")
+                    serverstate.connect(current_ip)
+                else:
+                    logging.info("No current IP found, using basic reconnect command")
+                    api.exec_command("reconnect")
+            else:
+                logging.info("No state available, using basic reconnect command")
+                api.exec_command("reconnect")
+                
+        except Exception as e:
+            logging.error(f"Error during map error countdown: {e}")
+            api.exec_command("reconnect")
+        finally:
+            MAP_ERROR_COUNTDOWN_ACTIVE = False
+    
+    # Start countdown in separate thread
+    countdown_thread = threading.Thread(target=countdown_and_reconnect)
+    countdown_thread.daemon = True
+    countdown_thread.start()
 
 def check_pause_timeout():
     """
@@ -88,10 +141,15 @@ def check_pause_timeout():
 
 def handle_error_with_delay(error_line, error_action):
     """
-    Handle error detection with a 5-second delay before executing the action
+    Handle error detection with appropriate delays and actions
     """
     global LAST_ERROR_TIME
     
+    if error_action == "MAP_ERROR":
+        logging.info(f"Map loading error detected: {error_line}")
+        handle_map_error_with_countdown()
+        return
+        
     if error_action == "RECONNECT":
         logging.info(f"Error detected: {error_line}")
         logging.info("Scheduling reconnect in 5 seconds...")
@@ -225,6 +283,10 @@ def read(file_path: str):
                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
                                       "REACHEDFINISH", "YOURRANK"]:
                
+               # ADD THIS DEBUG LOGGING
+               if "Rankings on" in line_data["content"] or "-----" in line_data["content"] or (". ^7" in line_data["content"] and "^3" in line_data["content"]):
+                   logging.info(f"[DEBUG] Adding !top result to queue: type={line_data['type']}, content={line_data['content'][:50]}...")
+               
                # Delay ALL messages by 2 seconds
                DELAYED_MESSAGE_QUEUE.append({
                    'message': line_data,
@@ -270,6 +332,18 @@ def process_line(line):
         "content": line,
         "timestamp": time.time()
     }
+
+    # Skip renderer initialization messages early - be specific to avoid filtering !top results
+    if any(pattern in line for pattern in [
+        "R_Init", 
+        "finished R_Init"
+    ]) or line.strip() == "----------------------":
+        return line_data  # Return as MISC type (won't be queued)
+
+    # ADD THIS DEBUG LOGGING
+    if "Rankings on" in line or "-----" in line or ". ^7" in line:
+        logging.info(f"[DEBUG] Processing !top line: {line}")
+        logging.info(f"[DEBUG] Initial line_data type: {line_data['type']}")
 
     # you can add more errors like this: ['error1', 'error2', 'error3']
     errors = ['ERROR: Unhandled exception cought']
@@ -381,20 +455,8 @@ def process_line(line):
                 # Reset timer when pause state is cleared
                 PAUSE_STATE_START_TIME = None
 
-            # for player in serverstate.players:
-            #     api.exec_command('tell ' + str(player.id) + ' Hey, "nospec" is on and your Twitch fans can\'t spectate you. Consider turning it off for them to fully enjoy your gameplay.')
-            #     api.exec_command('tell ' + str(player.id) + ' If you would like to turn off "nospec" feature off please write this command /color1 spec')
-
-        # sc_r = r"^\^5serverCommand:\s*(\d+?)\s*:\s*(.+?)$"
-        # match = re.match(sc_r, line)
-        #
-        # sv_command_id = match.group(1)
-        # sv_command = match.group(2)
-
         def parse_chat_message(command):
             # CHAT MESSAGE (BY PLAYER)
-
-            # chat_message_r = r"^chat\s*\"[\x19]*\[*(.*?)[\x19]*?\]*?\x19:\s*(.*?)\".*?$" #/developer 1
             chat_message_r = r"(.*)\^7: \^\d(.*)"
             match = re.match(chat_message_r, command)
 
@@ -431,6 +493,18 @@ def process_line(line):
             line_data["type"] = "PRINT"
             line_data["author"] = None
             line_data["content"] = print_message
+
+        def parse_top_results(command):
+            # Check for !top result patterns
+            if ("Rankings on" in command or 
+                "-----" in command or 
+                (command.startswith("^3  ") and ". ^7" in command) or  # numbered rankings
+                command.strip() == ""):  # empty lines in !top output
+                
+                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
+                line_data["type"] = "PRINT"
+                line_data["author"] = None
+                line_data["content"] = command
 
         def parse_scores(command):
             # SCORES
@@ -507,14 +581,11 @@ def process_line(line):
             else:
                 raise Exception()
 
-        # TODO: '... broke the server record ...'
-        # TODO: '!top results?'
-        # logging.info(f'LINE: {line}')
-
         for fun in [
                     parse_chat_message,
                     parse_chat_announce,
                     parse_print,
+                    parse_top_results,
                     parse_scores,
                     parse_rename,
                     parse_connected,
@@ -524,7 +595,6 @@ def process_line(line):
                     parse_reached_finish,
                     parse_your_rank]:
             try:
-                # fun(sv_command)
                 fun(line)
                 break
             except:
@@ -532,10 +602,11 @@ def process_line(line):
     except:
         return line_data
 
-    # logging.info(line_data)
+    if "Rankings on" in line or "-----" in line or ". ^7" in line:
+        logging.info(f"[DEBUG] Final line_data: type={line_data['type']}, content={line_data['content'][:50]}...")
+    
     PREVIOUS_LINE = line_data
     return line_data
-
 
 # HELPER
 def handle_fuzzy(r, fuzzy):
