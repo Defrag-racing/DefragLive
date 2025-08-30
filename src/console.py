@@ -45,7 +45,7 @@ def handle_map_error_with_countdown():
     """
     Handle map loading error with 60-second countdown and auto-reconnect
     """
-    global MAP_ERROR_COUNTDOWN_ACTIVE
+    global MAP_ERROR_COUNTDOWN_ACTIVE, DELAYED_MESSAGE_QUEUE
     
     if MAP_ERROR_COUNTDOWN_ACTIVE:
         return  # Already running countdown
@@ -54,16 +54,44 @@ def handle_map_error_with_countdown():
     logging.info("Map loading error detected. Starting 60-second countdown...")
     
     def countdown_and_reconnect():
-        global MAP_ERROR_COUNTDOWN_ACTIVE
+        global MAP_ERROR_COUNTDOWN_ACTIVE, DELAYED_MESSAGE_QUEUE
         
         try:
             for seconds_left in range(60, 0, -5):  # Count down from 60 in 5-second intervals
-                api.exec_command(f"cg_centertime 6;displaymessage 140 10 ^1Map update required. ^7Reconnecting in ^3{seconds_left} ^7seconds...")
+                # Create countdown message and add to delayed queue
+                countdown_msg = {
+                    'id': message_to_id(f"MAP_COUNTDOWN_{seconds_left}_{time.time()}"),
+                    'type': 'MAP_COUNTDOWN',
+                    'author': None,
+                    'content': f"^1Map update required. ^7Reconnecting in ^3{seconds_left} ^7seconds...",
+                    'timestamp': time.time(),
+                    'command': None
+                }
+                
+                # Add to delayed queue for immediate processing
+                DELAYED_MESSAGE_QUEUE.append({
+                    'message': countdown_msg,
+                    'send_time': time.time()  # Send immediately
+                })
+                
                 logging.info(f"Map error countdown: {seconds_left} seconds remaining")
                 time.sleep(5)
             
-            # Final message and reconnect
-            api.exec_command(f"cg_centertime 3;displaymessage 140 10 ^3Reconnecting now...")
+            # Final reconnect message
+            final_msg = {
+                'id': message_to_id(f"MAP_COUNTDOWN_FINAL_{time.time()}"),
+                'type': 'MAP_COUNTDOWN', 
+                'author': None,
+                'content': f"^3Reconnecting now...",
+                'timestamp': time.time(),
+                'command': None
+            }
+            
+            DELAYED_MESSAGE_QUEUE.append({
+                'message': final_msg,
+                'send_time': time.time()
+            })
+            
             logging.info("Map error countdown complete. Executing reconnect...")
             
             # Wait a moment then reconnect
@@ -281,7 +309,7 @@ def read(file_path: str):
                pass
             elif line_data["type"] in ["PRINT", "SAY", "ANNOUNCE", "RENAME", "CONNECTED", 
                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 
-                                      "REACHEDFINISH", "YOURRANK"]:
+                                      "REACHEDFINISH", "YOURRANK", "MAP_ERROR"]:
                
                # ADD THIS DEBUG LOGGING
                if "Rankings on" in line_data["content"] or "-----" in line_data["content"] or (". ^7" in line_data["content"] and "^3" in line_data["content"]):
@@ -357,12 +385,35 @@ def process_line(line):
         else:
             logging.info(f"[Q3] {line}")
 
+        # ADD THE MAP LOADING ERROR DETECTION HERE (before the ERROR_FILTERS check):
+        if "ERROR: CM_LoadMap: couldn't load maps/" in line:
+            # Extract map name from the error
+            map_name_match = re.search(r"couldn't load maps/(.+?)\.bsp", line)
+            map_name = map_name_match.group(1) if map_name_match else "unknown"
+            
+            # Create line_data for the map error (this will go through normal processing)
+            line_data["id"] = message_to_id(f"MAP_ERROR_{map_name}_{time.time()}")
+            line_data["type"] = "MAP_ERROR"
+            line_data["author"] = None
+            line_data["content"] = f"^1Map loading failed: ^7{map_name}.bsp could not be loaded. ^3Reconnecting in 60 seconds..."
+            
+            logging.info(f"Map loading error created: {map_name}")
+
         if line in {"VoteVote passed.", "RE_Shutdown( 0 )"}:
             if not serverstate.PAUSE_STATE:
                 serverstate.PAUSE_STATE = True
                 logging.info("Game is loading. Pausing state.")
                 # Reset the timer when pause state is set
                 PAUSE_STATE_START_TIME = None
+
+        # Check for specific error patterns first
+        for error_pattern, error_action in ERROR_FILTERS.items():
+            if error_pattern in line:
+                if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 10:
+                    LAST_ERROR_TIME = time.time()
+                    logging.info(f"Previous line: {PREVIOUS_LINE}")
+                    handle_error_with_delay(line, error_action)
+                break
 
         if line in ERROR_FILTERS:
             if LAST_ERROR_TIME is None or time.time() - LAST_ERROR_TIME >= 10:
