@@ -226,6 +226,15 @@ def filter_capital_letters_in_message(msg):
 
 
 def filter_message(msg, separator=' ^7> '):
+    # Exempt finish line messages and other game events from filtering
+    if any(pattern in msg for pattern in [
+        "reached the finish line",
+        "broke the server record", 
+        "sets the first time",
+        "you are now rank"
+    ]):
+        return msg
+    
     # Store original message for color code reconstruction
     original_msg = msg
     

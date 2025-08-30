@@ -572,14 +572,16 @@ def validate_state():
                 logging.info("AFK. Switching...")
                 api.display_message("^3AFK detected. ^7Switching to the next player.", time=5)
                 STATE.afk_counter = 0  # Reset AFK strike counter for next player
-                # Reset the timeout for this player back to default
+                # Reset the timeout for this player back to default when switching due to AFK
                 if str(STATE.current_player_id) in STATE.player_afk_timeouts:
                     del STATE.player_afk_timeouts[str(STATE.current_player_id)]
+                    logging.info(f"Reset AFK timeout for player {STATE.current_player_id} back to default (AFK timeout)")
         except ValueError:
             pass
 
     # Next player choice logic
     if spectating_self or spectating_nospec or spectating_afk:
+        old_player_id = STATE.current_player_id  # Store old player ID
         follow_id = random.choice(STATE.spec_ids) if STATE.spec_ids != [] else STATE.bot_id  # Find someone else to spec
 
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
@@ -594,12 +596,22 @@ def validate_state():
                     logging.info('Nospec detected. Switching...')
                     api.display_message("^7Nospec detected. Switching to the next player.")
 
+            # Reset timeout for old player back to default when switching to different player
+            if old_player_id != follow_id and old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
+                del STATE.player_afk_timeouts[str(old_player_id)]
+                logging.info(f"Reset AFK timeout for player {old_player_id} back to default (player switch)")
+
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
             STATE.idle_counter = 0  # Reset idle counter
 
         else:  # Only found ourselves to spec.
             if STATE.current_player_id != STATE.bot_id:  # Stop spectating player, go to free spec mode instead.
+                # Reset timeout when switching to bot
+                if str(STATE.current_player_id) in STATE.player_afk_timeouts:
+                    del STATE.player_afk_timeouts[str(STATE.current_player_id)]
+                    logging.info(f"Reset AFK timeout for player {STATE.current_player_id} back to default (switching to bot)")
+                
                 api.exec_command(f"follow {follow_id}")
                 STATE.current_player_id = STATE.bot_id
             else:  # Was already spectating self. This is an idle strike
@@ -644,9 +656,8 @@ def validate_state():
                     player_name = STATE.current_player.n if STATE.current_player else "Unknown"
                     api.display_message(f" AFK detected. Switching in {remaining_time} seconds.", time=5)
                     
-                    # Also send to Twitch chat via websocket or direct chat bridge
+                    # Also send to Twitch chat through the chat bridge system
                     try:
-                        # Send to Twitch chat through the chat bridge system
                         import console
                         import json
                         afk_msg = {
@@ -698,9 +709,21 @@ def validate_state():
             STATE.afk_counter = 0
             STATE.afk_ids = []
             IGNORE_IPS = []
-            # Reset timeout back to default when player becomes active
-            if str(STATE.current_player_id) in STATE.player_afk_timeouts:
-                del STATE.player_afk_timeouts[str(STATE.current_player_id)]
+            # DO NOT reset timeout when player becomes active - keep extended timeout until player switch
+            # The timeout will only be reset when switching to a different player (handled above)
+
+def switch_to_player(follow_id):
+    """Helper function to handle player switching and timeout cleanup"""
+    old_player_id = STATE.current_player_id
+    
+    # Reset timeout for old player back to default when switching away
+    if old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
+        del STATE.player_afk_timeouts[str(old_player_id)]
+        logging.info(f"Reset AFK timeout for player {old_player_id} back to default (player switch)")
+    
+    # Switch to new player
+    STATE.current_player_id = follow_id
+    STATE.current_player = STATE.get_player_by_id(follow_id)
 
 def connect(ip, caller=None):
     """
