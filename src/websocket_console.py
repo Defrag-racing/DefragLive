@@ -159,6 +159,8 @@ def handle_ws_command(msg):
                 break
         return
 
+    # In websocket_console.py, modify the handle_ws_command function:
+
     if content['action'] == 'spectate':
         logging.info("[CONSOLE] SPECTATE REQUEST")
 
@@ -170,6 +172,27 @@ def handle_ws_command(msg):
         if 'id:' in content['value']:
             id = content['value'].split(':')[1]
             logging.info("[CONSOLE] SPECIFIC ID SPECTATE REQUEST " + str(id))
+            
+            # MANUAL SPECTATE - Reset AFK state for the selected player
+            if hasattr(serverstate, 'STATE') and serverstate.STATE:
+                # Remove the selected player from AFK list if they were there
+                if id in serverstate.STATE.afk_ids:
+                    serverstate.STATE.afk_ids.remove(id)
+                    logging.info(f"Removed player {id} from AFK list due to manual spectate")
+                
+                # Reset AFK counter since this is a manual override
+                serverstate.STATE.afk_counter = 0
+                
+                # Clear IGNORE_IPS to allow staying on current server
+                serverstate.IGNORE_IPS = []
+                
+                # Reset any custom AFK timeout for this player back to default
+                if str(id) in serverstate.STATE.player_afk_timeouts:
+                    del serverstate.STATE.player_afk_timeouts[str(id)]
+                    logging.info(f"Reset AFK timeout for player {id} back to default (manual spectate)")
+                    
+                logging.info(f"Manual spectate to {id}: AFK counter reset, player removed from AFK list")
+            
             api.exec_command(f"follow {id}")
             serverstate.STATE.current_player_id = id  # Keep as string, don't convert to int
             api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
