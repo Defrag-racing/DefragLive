@@ -380,19 +380,29 @@ async def ws_start(q):
             ws_send_queue(websocket, q),
         )
 
-
+# In websocket_console.py, modify the ws_worker function error handling:
 def ws_worker(q, loop):
     while True:
         try:
-            # loop.run_until_complete(asyncio.wait([
-            #     ws_receive(config.WS_ADDRESS),
-            #     ws_send_queue(config.WS_ADDRESS, q),
-            # ]))
-            # loop.create_task(ws_start(q))
-            # loop.run_forever()
             loop.run_until_complete(ws_start(q))
         except Exception as e:
-            logging.info('\nWebsocket error: {}'.format(str(e)))
+            logging.info(f'\nWebsocket error: {str(e)}')
             logging.info('Please check if the websocket server is running!\n')
+            
+            # Send error notification to extension
+            try:
+                import console
+                import json
+                error_msg = {
+                    'id': console.message_to_id(f"WS_ERROR_{time.time()}"),
+                    'type': 'CONNECTION_ERROR',
+                    'author': None,
+                    'content': f'Websocket connection error: {str(e)}',
+                    'timestamp': time.time(),
+                    'command': None
+                }
+                console.WS_Q.put(json.dumps({'action': 'message', 'message': error_msg}))
+            except Exception as queue_error:
+                logging.error(f"Failed to send websocket error to extension: {queue_error}")
         finally:
             time.sleep(1)
