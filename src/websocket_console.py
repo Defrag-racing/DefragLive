@@ -163,18 +163,15 @@ def handle_ws_command(msg):
 
         if content['value'] == 'next':
             serverstate.switch_spec('next')
-            api.exec_command(f"cg_centertime 2;varcommand displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
+            api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
             time.sleep(1)
             return
         if 'id:' in content['value']:
             id = content['value'].split(':')[1]
             logging.info("[CONSOLE] SPECIFIC ID SPECTATE REQUEST " + str(id))
-            # ADD THIS: Force spectate bypassing AFK checks for extension requests
-            api.exec_command(f"follow {id}")  # Direct follow command instead of serverstate.spectate_player
-            serverstate.STATE.current_player_id = int(id)  # Update state manually if needed
-            api.exec_command(f"cg_centertime 2;varcommand displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
-            time.sleep(1)
-            return
+            api.exec_command(f"follow {id}")
+            serverstate.STATE.current_player_id = id  # Keep as string, don't convert to int
+            api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
 
     if content['action'] == 'spectate_request':
         player_name = content['value']

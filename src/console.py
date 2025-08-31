@@ -543,6 +543,11 @@ def process_line(line):
 
             print_message = match.group(1)
 
+            # Filter out empty PRINT messages from varcommand displaymessage
+            if not print_message or print_message.strip() == "":
+                line_data["type"] = "MISC"  # Change to MISC so it won't be queued
+                return
+
             line_data["id"] = message_to_id(f"PRINT_{print_message}")
             line_data["type"] = "PRINT"
             line_data["author"] = None

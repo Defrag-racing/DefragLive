@@ -587,14 +587,22 @@ def validate_state():
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
             if spectating_nospec:
                 if not PAUSE_STATE and not spectating_self:
-                    print("spectating_nospec: " + str(spectating_nospec))
-                    print("state.spec_ids: " + str(json.dumps(STATE.spec_ids)))
-                    print("state.current_player_id: " + str(STATE.current_player_id))
-                    print("state.bot_id: " + str(STATE.bot_id))
-                    print("follow_id: " + str(follow_id))
-
-                    logging.info('Nospec detected. Switching...')
-                    api.display_message("^7Nospec detected. Switching to the next player.")
+                    # Determine WHY player is not specable for better error message
+                    target_player = STATE.get_player_by_id(STATE.current_player_id)
+                    if target_player:
+                        if target_player.t == '3':  # Player is a spectator
+                            logging.info('Free spectator detected. Switching...')
+                            api.display_message("^7Can't spec free spectators. Switching.")
+                        elif target_player.c1 in ['nospec', 'nospecpm']:  # Actual nospec
+                            logging.info('Nospec detected. Switching...')
+                            api.display_message("^7Nospec detected. Switching.")
+                        else:  # Other reason (shouldn't happen but fallback)
+                            logging.info('Player not specable. Switching...')
+                            api.display_message("^7Player unavailable. Switching.")
+                    else:
+                        # Fallback if player object not found
+                        logging.info('Player not specable. Switching...')
+                        api.display_message("^7Player unavailable. Switching.")
 
             # Reset timeout for old player back to default when switching to different player
             if old_player_id != follow_id and old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
