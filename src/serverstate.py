@@ -106,7 +106,7 @@ WORLD_RECORD_MESSAGES = [
 
 # Rate limiting for world records
 LAST_WR_MESSAGE_TIME = 0
-WR_MESSAGE_COOLDOWN = 30 * 60  # 30 minutes in seconds
+WR_MESSAGE_COOLDOWN = 60  # 1 minute
 
 RECONNECTED_CHECK = False
 

@@ -19,13 +19,14 @@ import servers
 def serverstate_to_json():
     data = {
         'bot_id': serverstate.STATE.bot_id,
+        'bot_secret': serverstate.STATE.secret,  # ADD THIS LINE
         'current_player_id': serverstate.STATE.current_player_id,
         'mapname': serverstate.STATE.mapname,
         'df_promode': serverstate.STATE.df_promode,
         'defrag_gametype': serverstate.STATE.defrag_gametype,
         'num_players': serverstate.STATE.num_players,
-        'ip': serverstate.STATE.ip,           # ADD THIS LINE
-        'hostname': serverstate.STATE.hostname,  # ADD THIS LINE
+        'ip': serverstate.STATE.ip,
+        'hostname': serverstate.STATE.hostname,
         'players': {},
     }
 
