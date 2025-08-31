@@ -11,10 +11,15 @@ import serverstate
 import filters
 import servers
 
+import requests
+import threading
+
 # logger = logging.getLogger('websockets')
 # logger.setLevel(logging.DEBUG)
 # logger.addHandler(logging.StreamHandler())
 
+TRANSLATION_CACHE = {}
+TRANSLATION_LOCKS = {}
 
 def serverstate_to_json():
     data = {
@@ -141,6 +146,74 @@ def notify_serverstate_change():
     console.WS_Q.put(json.dumps({'action': 'serverstate', 'message': data}))
     logging.info('--- serverstate change ---')
 
+def handle_translation_request(cache_key, text, message_id):
+    global TRANSLATION_CACHE, TRANSLATION_LOCKS
+    
+    if cache_key in TRANSLATION_CACHE:
+        logging.info(f"Translation cache hit for: {text[:50]}...")
+        broadcast_translation(cache_key, TRANSLATION_CACHE[cache_key])
+        return
+    
+    if cache_key in TRANSLATION_LOCKS:
+        logging.info(f"Translation already in progress for: {text[:50]}...")
+        return
+    
+    TRANSLATION_LOCKS[cache_key] = True
+    
+    def translate_and_broadcast():
+        try:
+            logging.info(f"Starting translation for: {text[:50]}...")
+            
+            # Get API key from your bot config
+            api_key = environ.get('GOOGLE_TRANSLATE_API_KEY', '')
+            if not api_key:
+                logging.error("Google Translate API key not found")
+                return
+            
+            response = requests.post('https://translation.googleapis.com/language/translate/v2', 
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                data={
+                    'key': api_key,
+                    'q': text,
+                    'target': 'en',
+                    'format': 'text'
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data and 'translations' in data['data'] and len(data['data']['translations']) > 0:
+                    translation = data['data']['translations'][0]['translatedText']
+                    TRANSLATION_CACHE[cache_key] = translation
+                    broadcast_translation(cache_key, translation)
+                    logging.info(f"Translation completed: {text[:30]} -> {translation[:30]}")
+            else:
+                logging.error(f"Translation API error: {response.status_code}")
+                
+        except Exception as e:
+            logging.error(f"Translation failed: {e}")
+        finally:
+            if cache_key in TRANSLATION_LOCKS:
+                del TRANSLATION_LOCKS[cache_key]
+    
+    thread = threading.Thread(target=translate_and_broadcast)
+    thread.daemon = True
+    thread.start()
+
+def broadcast_translation(cache_key, translation):
+    import console
+    import json
+    
+    translation_broadcast = {
+        'action': 'translation_result',
+        'cache_key': cache_key,
+        'translation': translation,
+        'timestamp': time.time()
+    }
+    
+    console.WS_Q.put(json.dumps(translation_broadcast))
+    logging.info(f"Broadcasted translation to all viewers")
 
 def handle_ws_command(msg):
     logging.info('[WS] Handle command: %s', str(msg))
@@ -152,11 +225,13 @@ def handle_ws_command(msg):
     if type(content) is not dict:
         return
 
-    if content['action'] == 'delete_message':
-        for idx, msg in enumerate(console.CONSOLE_DISPLAY):
-            if msg['id'] == content['id']:
-                del console.CONSOLE_DISPLAY[idx]
-                break
+    if content['action'] == 'translate_message':
+        cache_key = content['cache_key']
+        text = content['text'] 
+        message_id = content.get('message_id')
+        
+        logging.info(f"[TRANSLATION REQUEST] Cache key: {cache_key[:50]}...")
+        handle_translation_request(cache_key, text, message_id)
         return
 
     # In websocket_console.py, modify the handle_ws_command function:
