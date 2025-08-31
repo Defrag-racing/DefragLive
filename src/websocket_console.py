@@ -66,7 +66,7 @@ def parsed_serverstate():
 
 @app.route('/console.json')
 def parsed_console_log():
-    output = console.CONSOLE_DISPLAY[-75:] # [::-1] = reversed. console needs new messages at bottom
+    output = console.CONSOLE_DISPLAY[-200:] # [::-1] = reversed. console needs new messages at bottom
     output = jsonify(output)
 
     # TODO: fix CORS for production

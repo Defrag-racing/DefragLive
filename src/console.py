@@ -29,6 +29,7 @@ LAST_ERROR_TIME = None
 PAUSE_STATE_START_TIME = None  # Add this global variable
 DELAYED_MESSAGE_QUEUE = []
 MAP_ERROR_COUNTDOWN_ACTIVE = False
+SENT_MESSAGE_IDS = set()
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -786,28 +787,38 @@ def wait_log(start_ts=0, end_type=None, end_author=None, end_content=None, end_c
 
         time.sleep(delay)
 
+SENT_MESSAGE_IDS = set()  # Add this at the top of console.py
+
 def process_delayed_messages():
     """Background thread to process delayed messages"""
-    global DELAYED_MESSAGE_QUEUE
+    global DELAYED_MESSAGE_QUEUE, SENT_MESSAGE_IDS
+    
     while True:
         current_time = time.time()
-        # Check for messages ready to be sent
         messages_to_send = []
         remaining_messages = []
         
         for delayed_msg in DELAYED_MESSAGE_QUEUE:
             if current_time >= delayed_msg['send_time']:
-                messages_to_send.append(delayed_msg['message'])
+                msg = delayed_msg['message']
+                msg_id = msg.get('id')
+                
+                # Skip if already sent - THIS IS THE KEY FIX
+                if msg_id not in SENT_MESSAGE_IDS:
+                    messages_to_send.append(msg)
+                    SENT_MESSAGE_IDS.add(msg_id)
             else:
                 remaining_messages.append(delayed_msg)
         
-        # Send ready messages
+        # Clean up old message IDs periodically
+        if len(SENT_MESSAGE_IDS) > 500:
+            SENT_MESSAGE_IDS = set(list(SENT_MESSAGE_IDS)[-250:])
+        
+        # Send ready messages (rest stays the same)
         for msg in messages_to_send:
             logging.info(f"Sending delayed message: {msg['type']} - {msg['content'][:50]}...")
             CONSOLE_DISPLAY.append(msg)
             WS_Q.put(json.dumps({'action': 'message', 'message': msg}))
         
-        # Update queue
         DELAYED_MESSAGE_QUEUE = remaining_messages
-        
-        time.sleep(0.1)  # Check every 100ms
+        time.sleep(0.1)
