@@ -19,6 +19,208 @@ import threading
 # logger.setLevel(logging.DEBUG)
 # logger.addHandler(logging.StreamHandler())
 
+import os
+import time
+import logging
+
+SETTINGS_QUEUE = []
+
+def handle_settings_command(content):
+    """Handle settings command from VPS"""
+    # QUEUE SETTINGS COMMANDS DURING MAP LOADING
+    if hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE:
+        logging.info(f"[SETTINGS] Queued settings command during pause: {content['command']}")
+        SETTINGS_QUEUE.append(content)
+        return
+        
+    if hasattr(serverstate, 'CONNECTING') and serverstate.CONNECTING:
+        logging.info(f"[SETTINGS] Queued settings command during connecting: {content['command']}")
+        SETTINGS_QUEUE.append(content)
+        return
+    
+    # Execute immediately if not loading
+    execute_settings_command(content)
+
+def execute_settings_command(content):
+    """Execute a single settings command"""
+    logging.info(f'[SETTINGS] Received command: {content["command"]}')
+    
+    try:
+        api.exec_command(content["command"])
+        logging.info(f'[SETTINGS] Executed: {content["command"]}')
+    except Exception as e:
+        logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
+
+def process_queued_settings():
+    """Process all queued settings commands after map loading"""
+    global SETTINGS_QUEUE
+    
+    if SETTINGS_QUEUE:
+        logging.info(f"[SETTINGS] Processing {len(SETTINGS_QUEUE)} queued settings commands")
+        
+        for content in SETTINGS_QUEUE:
+            execute_settings_command(content)
+        
+        SETTINGS_QUEUE.clear()
+        logging.info("[SETTINGS] Finished processing queued settings commands")
+
+def get_current_game_settings():
+    """Get current game settings by reading the config file"""
+    settings_file_path = r"D:\Games\defragtv\defrag\settings-current.cfg"
+    
+    # Default values for all cvars
+    default_values = {
+        'r_rendertriggerBrushes': '0',
+        'r_fastsky': '0', 
+        'r_renderClipBrushes': '0',
+        'r_renderSlickSurfaces': '0',
+        'r_mapoverbrightbits': '2',
+        'r_picmip': '0',
+        'r_fullbright': '0',
+        'r_gamma': '1.2',
+        'cg_drawgun': '1',
+        'df_chs1_Info6': '0',
+        'cg_lagometer': '0',
+        'mdd_snap': '3',
+        'mdd_cgaz': '1',
+        'df_chs1_Info5': '23',
+        'df_drawSpeed': '0',
+        'df_chs0_draw': '1',
+        'df_chs1_Info7': '0',
+        'df_mp_NoDrawRadius': '100',
+        'cg_thirdperson': '0',
+        'df_ghosts_MiniviewDraw': '0',
+        'cg_gibs': '0',
+        'com_blood': '0'
+    }
+    
+    # Mapping from game cvars to UI setting names
+    cvar_to_setting = {
+        'r_rendertriggerBrushes': 'triggers',
+        'r_fastsky': 'sky',
+        'r_renderClipBrushes': 'clips', 
+        'r_renderSlickSurfaces': 'slick',
+        'r_mapoverbrightbits': 'brightness',
+        'r_picmip': 'picmip',
+        'r_fullbright': 'fullbright',
+        'r_gamma': 'gamma',
+        'cg_drawgun': 'drawgun',
+        'df_chs1_Info6': 'angles',
+        'cg_lagometer': 'lagometer',
+        'mdd_snap': 'snaps',
+        'mdd_cgaz': 'cgaz',
+        'df_chs1_Info5': 'speedinfo',
+        'df_drawSpeed': 'speedorig',
+        'df_chs0_draw': 'inputs',
+        'df_chs1_Info7': 'obs',
+        'df_mp_NoDrawRadius': 'nodraw',
+        'cg_thirdperson': 'thirdperson',
+        'df_ghosts_MiniviewDraw': 'miniview',
+        'cg_gibs': 'gibs',
+        'com_blood': 'blood'
+    }
+    
+    try:
+        # Execute writeconfig command to generate current settings file
+        logging.info("[SETTINGS] Writing current config to settings-current.cfg")
+        api.exec_command("writeconfig settings-current.cfg")
+        
+        # Wait for file to be written
+        time.sleep(0.5)
+        
+        # Check if file exists
+        if not os.path.exists(settings_file_path):
+            logging.error(f"[SETTINGS] Config file not found: {settings_file_path}")
+            return {}
+        
+        # Read the config file and parse cvar values
+        current_values = {}
+        
+        with open(settings_file_path, 'r') as f:
+            content = f.read()
+            
+        # Parse each line to find cvar settings
+        for line in content.split('\n'):
+            line = line.strip()
+            
+            # Skip comments and empty lines
+            if not line or line.startswith('//') or line.startswith('#'):
+                continue
+                
+            # Look for "seta cvar_name value" format
+            if line.startswith('seta '):
+                parts = line.split()
+                if len(parts) >= 3:
+                    cvar_name = parts[1]
+                    cvar_value = parts[2].strip('"')  # Remove quotes if present
+                    
+                    if cvar_name in default_values:
+                        current_values[cvar_name] = cvar_value
+        
+        # Fill in missing cvars with defaults
+        for cvar_name in default_values:
+            if cvar_name not in current_values:
+                current_values[cvar_name] = default_values[cvar_name]
+                logging.info(f"[SETTINGS] Using default value for {cvar_name}: {default_values[cvar_name]}")
+        
+        # Convert to UI setting format
+        ui_settings = {}
+        for cvar_name, cvar_value in current_values.items():
+            if cvar_name in cvar_to_setting:
+                setting_key = cvar_to_setting[cvar_name]
+                
+                # Convert values to appropriate types
+                if setting_key in ['brightness', 'picmip', 'snaps', 'speedinfo', 'nodraw']:
+                    # Integer values
+                    ui_settings[setting_key] = int(cvar_value)
+                elif setting_key == 'gamma':
+                    # Float value
+                    ui_settings[setting_key] = float(cvar_value)
+                else:
+                    # Boolean values (0 = False, anything else = True)
+                    ui_settings[setting_key] = bool(int(cvar_value))
+        
+        logging.info(f"[SETTINGS] Successfully read current game settings: {ui_settings}")
+        return ui_settings
+        
+    except Exception as e:
+        logging.error(f"[SETTINGS] Failed to get current game settings: {e}")
+        return {}
+
+def sync_current_settings_to_vps():
+    """Send current game settings to VPS when bot starts"""
+    logging.info("[SETTINGS] Syncing current game settings to VPS")
+    
+    try:
+        current_settings = get_current_game_settings()
+        
+        if current_settings:
+            # Send to VPS
+            sync_message = {
+                'action': 'sync_settings',
+                'settings': current_settings,
+                'source': 'defrag_bot'
+            }
+            
+            console.WS_Q.put(json.dumps(sync_message))
+            logging.info(f"[SETTINGS] Sent current settings to VPS: {current_settings}")
+        else:
+            logging.warning("[SETTINGS] No settings to sync")
+        
+    except Exception as e:
+        logging.error(f"[SETTINGS] Failed to sync settings to VPS: {e}")
+
+def handle_settings_command(content):
+    """Handle settings command from VPS"""
+    logging.info(f'[SETTINGS] Received command: {content["command"]}')
+    
+    try:
+        # Execute the console command in the game
+        api.exec_command(content["command"])
+        logging.info(f'[SETTINGS] Executed: {content["command"]}')
+    except Exception as e:
+        logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
+
 def serverstate_to_json():
     data = {
         'bot_id': serverstate.STATE.bot_id,
@@ -112,26 +314,6 @@ def run_flask_server(host, port):
 
     asgi_app = asgiref.wsgi.WsgiToAsgi(app)
     uvicorn.run(asgi_app, host=host, port=port, log_level="warning", access_log=False)
-
-
-# @app.route('/console/send', methods=['POST'])
-# def send_message():
-#     author = request.form.get('author', None)
-#     message = request.form.get('message', None)
-#     command = request.form.get('command', None)
-
-#     if command is not None and command.startswith("!"):
-#         if ";" in command:  # prevent q3 command injections
-#             command = command[:command.index(";")]
-#         api.exec_command(command)
-#         return jsonify(result=f"Sent mdd command {command}")
-#     else:
-#         if ";" in message:  # prevent q3 command injections
-#             message = message[:message.index(";")]
-#         api.exec_command(f"say {author} ^7> ^2{message}")
-#         return jsonify(result=f"Sent {author} ^7> ^2{message}")
-
-#     return jsonify(result="Unknown message")
 
 
 # ------------------------------------------------------------
@@ -324,6 +506,11 @@ def on_ws_message(msg):
         logging.info('ERROR [on_ws_message]:', e)
         return
 
+    # Handle settings commands from VPS (BEFORE origin check)
+    if message.get('action') == 'execute_command':
+        handle_settings_command(message)
+        return
+
     # if there is no origin, exit
     # this function only processes messages directly from twitch console extension
     if 'origin' not in message:
@@ -400,27 +587,18 @@ async def ws_receive(websocket):
         on_ws_message(msg)
 
 
-# async def start_ws(uri, q):
-#     async with websockets.connect(uri) as websocket:
-#         while True:
-#             async for msg in websocket:
-#                 logging.info('ws_receive msg !!!')
-#                 on_ws_message(msg)
-#                 break
-
-#             if not q.empty():
-#                 logging.info('ws_send_queue msg !!!')
-#                 msg = q.get()
-#                 if msg == '>>quit<<':
-#                     await websocket.close(reason='KTHXBYE!')
-#                 else:
-#                     await websocket.send(msg)
-
-#             await asyncio.sleep(0)
-
-
 async def ws_start(q):
     async with websockets.connect(config.WS_ADDRESS) as websocket:
+        # Identify this connection as the DefragLive bot
+        bot_id_message = {
+            'action': 'identify_bot'
+        }
+        await websocket.send(json.dumps(bot_id_message))
+        logging.info("[SETTINGS] Identified as DefragLive bot to VPS")
+        
+        # Sync current settings to VPS after connecting
+        sync_current_settings_to_vps()
+        
         await asyncio.gather(
             ws_receive(websocket),
             ws_send_queue(websocket, q),
