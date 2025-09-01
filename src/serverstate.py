@@ -509,7 +509,8 @@ def initialize_state(force=False):
                 send_auto_greeting()
             greeting_thread = threading.Thread(target=delayed_auto_greeting, daemon=True)
             greeting_thread.start()
-    except:
+    except Exception as e:
+        logging.error(f"State initialization failed: {e}")
         return False
     return True
 
@@ -1000,7 +1001,7 @@ def get_svinfo_report(filename):
                 if player_data['c1'] == 'nospecpm':
                     nopmids.append(int(cli_id))
 
-        except:
+        except Exception:
             continue
 
     server_info['spec_ids'] = spec_ids
@@ -1028,7 +1029,7 @@ def parse_svinfo_report(lines):
             try:
                 # Extract server's ip
                 ip = re.match(title_r, line).group(1)
-            except:
+            except Exception:
                 pass
 
         # Check if line is a header
@@ -1040,7 +1041,7 @@ def parse_svinfo_report(lines):
                 info[header] = {}
 
             continue
-        except:
+        except Exception:
             pass
 
         # Don't parse any lines until we have a header
@@ -1054,7 +1055,7 @@ def parse_svinfo_report(lines):
             value = match.group(2)
 
             info[header][key] = value
-        except:
+        except Exception:
             pass
 
     return info, ip

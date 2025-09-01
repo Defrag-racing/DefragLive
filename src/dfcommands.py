@@ -223,7 +223,8 @@ def handle_stonk(line_data):
         color = "^1" if '-' in change else "^2"
         change = change.replace('%', ' p/c')
         reply_string = f"^7{symbol}^3: {color}{price} {currency} ({change}) ^7{short_name} ({exchange})"
-    except:
+    except Exception as e:
+        logging.error(f"Error in stonk command: {e}")
         reply_string = "Invalid input. Usage: ?stonk <symbol>"
     return api.exec_command(f"say {reply_string}")
 

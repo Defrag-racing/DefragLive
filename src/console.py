@@ -775,9 +775,10 @@ def process_line(line):
             try:
                 fun(line)
                 break
-            except:
+            except Exception:
                 continue
-    except:
+    except Exception as e:
+        logging.error(f"Error processing line: {e}")
         return line_data
 
     PREVIOUS_LINE = line_data
@@ -807,7 +808,7 @@ def check_line(line_obj, end_type, end_author, end_content, end_content_fuzzy):
         try:
             if not re.match(end_content, line_obj["content"]):
                 return False
-        except:
+        except Exception:
             return False
 
     return True

@@ -50,7 +50,7 @@ def read_cfg():
             key = match.group(1)
             cmd = match.group(2)
             BINDS[cmd] = key
-        except:
+        except Exception:
             continue
 
     validate_cfg()

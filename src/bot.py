@@ -219,8 +219,8 @@ if __name__ == "__main__":
         api.api_init()
         window_flag = True
         logging.info("Found defrag window.")
-    except:
-        logging.info("Defrag not running, starting...")
+    except Exception as e:
+        logging.info(f"Defrag not running, starting... Error: {e}")
         df_process = Process(target=launch)
         df_process.start()
         time.sleep(15)

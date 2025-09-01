@@ -32,7 +32,8 @@ def scrape_servers_data():
     try:
         url = f'https://defrag.racing/servers/json'
         data = requests.get(url, verify=False).json()
-    except:
+    except Exception as e:
+        logging.error(f"Failed to fetch servers data: {e}")
         return LAST_SERVERS_DATA or {
             "active": {},
             "empty": {}
