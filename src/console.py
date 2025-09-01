@@ -700,6 +700,25 @@ def process_line(line):
                 line_data["type"] = "ENTEREDGAME"
                 line_data["author"] = None
                 line_data["content"] = command
+                
+                # ADD THIS: Trigger automatic +scores refresh
+                import threading
+                import time
+                
+                def delayed_scores_refresh():
+                    time.sleep(2)  # Wait 2 seconds after player enters
+                    try:
+                        import config
+                        import api
+                        key = config.get_bind("+scores")
+                        logging.info(f"Auto-refreshing scores for new player: {command}")
+                        api.hold_key(key, 0.0001)
+                    except Exception as e:
+                        logging.error(f"Failed to auto-refresh scores: {e}")
+                
+                # Run in separate thread to avoid blocking
+                refresh_thread = threading.Thread(target=delayed_scores_refresh, daemon=True)
+                refresh_thread.start()
             else:
                 raise Exception()
 

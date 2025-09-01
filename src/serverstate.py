@@ -597,22 +597,22 @@ def validate_state():
     old_player_id = STATE.current_player_id  # Store for timeout cleanup
     
     # EXISTING DEBUG LOGGING
-    logging.info(f"DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}")
-    logging.info(f"DEBUG: spectating_self check: {STATE.current_player_id == STATE.bot_id}")
-    if STATE.current_player:
-        logging.info(f"DEBUG: current_player name: {STATE.current_player.n}")
-    else:
-        logging.info("DEBUG: current_player is None")
+    # logging.info(f"DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}")
+    # logging.info(f"DEBUG: spectating_self check: {STATE.current_player_id == STATE.bot_id}")
+    # if STATE.current_player:
+        # logging.info(f"DEBUG: current_player name: {STATE.current_player.n}")
+    # else:
+        # logging.info("DEBUG: current_player is None")
     
-    logging.info(f"DEBUG: spec_ids={STATE.spec_ids}")
-    logging.info(f"DEBUG: nospec_ids={STATE.nospec_ids}")
-    logging.info(f"DEBUG: total players={len(STATE.players)}")
-    for player in STATE.players:
-        logging.info(f"DEBUG: Player {player.id}: {player.n}, team={player.t}, c1={player.c1}")
+    # logging.info(f"DEBUG: spec_ids={STATE.spec_ids}")
+    # logging.info(f"DEBUG: nospec_ids={STATE.nospec_ids}")
+    # logging.info(f"DEBUG: total players={len(STATE.players)}")
+    # for player in STATE.players:
+        # logging.info(f"DEBUG: Player {player.id}: {player.n}, team={player.t}, c1={player.c1}")
     
     # ADD THESE NEW DEBUG LINES HERE:
-    logging.info(f"DEBUG: Looking for player with ID {STATE.current_player_id}")
-    logging.info(f"DEBUG: get_player_by_id result: {STATE.get_player_by_id(STATE.current_player_id)}")
+    # logging.info(f"DEBUG: Looking for player with ID {STATE.current_player_id}")
+    # logging.info(f"DEBUG: get_player_by_id result: {STATE.get_player_by_id(STATE.current_player_id)}")
     
     # Wrap the team check in try-catch to prevent crashing the main loop
     try:
