@@ -35,6 +35,8 @@ IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
 VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
+LAST_TEAM_CHECK_TIME = 0
+TEAM_CHECK_INTERVAL = 30  # Check every 30 seconds
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -545,7 +547,14 @@ def validate_state():
     global PAUSE_STATE
     global IGNORE_IPS
     global RECONNECTED_CHECK
-
+    
+    # Wrap the team check in try-catch to prevent crashing the main loop
+    try:
+        check_bot_team_status()
+    except Exception as e:
+        logging.error(f"Error in team status check: {e}")
+        # Continue with normal validation even if team check fails
+    
     if STATE.get_player_by_id(STATE.bot_id) is None:
         spectating_self = False
     else:
@@ -1063,3 +1072,50 @@ def remove_color_codes(text):
     """Remove Quake 3 color codes from text for comparison"""
     import re
     return re.sub(r'\^.', '', text)
+
+def check_bot_team_status():
+    """
+    Periodic check to ensure bot is in spectator mode when it should be.
+    Prevents bot from getting stuck in player mode.
+    """
+    global LAST_TEAM_CHECK_TIME, STATE
+    
+    current_time = time.time()
+    
+    # Only check every TEAM_CHECK_INTERVAL seconds
+    if current_time - LAST_TEAM_CHECK_TIME < TEAM_CHECK_INTERVAL:
+        return
+        
+    LAST_TEAM_CHECK_TIME = current_time
+    
+    # Skip check if in standby mode or during initialization
+    if not STATE or not STATE_INITIALIZED or PAUSE_STATE:
+        return
+    
+    # Get bot player object
+    bot_player = STATE.get_player_by_id(STATE.bot_id)
+    if not bot_player:
+        logging.warning("Bot player not found during team check")
+        return
+    
+    # Check if bot is in player mode when it should be spectating
+    if bot_player.t != '3':  # '3' means spectator, anything else is player mode
+        logging.warning(f"Bot detected in player mode (team={bot_player.t}) instead of spectator mode")
+        logging.info("Forcing bot back to spectator mode...")
+        
+        # Force switch to spectator mode
+        api.exec_command("team s")
+        
+        # Reset relevant counters since we're fixing a stuck state
+        STATE.idle_counter = 0
+        STATE.afk_counter = 0
+        
+        # Clear ignore IPs since this might help find active servers
+        global IGNORE_IPS
+        IGNORE_IPS = []
+        
+        logging.info("Bot forced back to spectator mode due to periodic check")
+        
+        # If we're alone on server after switching to spec, trigger server switching logic
+        if len(STATE.spec_ids) == 0:
+            logging.info("No spectatable players found after team switch - may trigger server switch")
