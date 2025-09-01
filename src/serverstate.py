@@ -37,6 +37,8 @@ STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching 
 VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
 LAST_TEAM_CHECK_TIME = 0
 TEAM_CHECK_INTERVAL = 30  # Check every 30 seconds
+AFK_COUNTDOWN_ACTIVE = False
+AFK_HELP_THREADS = []  # Track active help threads
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -426,6 +428,12 @@ def initialize_state(force=False):
     global INIT_TIMEOUT
     global STATE_INITIALIZED
     global LAST_TIME
+    global AFK_COUNTDOWN_ACTIVE
+    global AFK_HELP_THREADS
+
+    # RESET AFK FLAGS ON INITIALIZATION
+    AFK_COUNTDOWN_ACTIVE = False
+    AFK_HELP_THREADS.clear()
 
     try:
         # Create a secret code. Only "secret" for one use.
@@ -547,6 +555,8 @@ def validate_state():
     global PAUSE_STATE
     global IGNORE_IPS
     global RECONNECTED_CHECK
+    global AFK_COUNTDOWN_ACTIVE
+    global AFK_HELP_THREADS
     
     # Wrap the team check in try-catch to prevent crashing the main loop
     try:
@@ -689,21 +699,30 @@ def validate_state():
             elif STATE.afk_counter >= 20 and STATE.afk_counter % 10 == 0:  # Every 10 strikes at 20, 30, 40...
                 remaining_time = (current_afk_timeout - STATE.afk_counter) * 2
                 if remaining_time > 0:
+                    AFK_COUNTDOWN_ACTIVE = True  # ADD THIS LINE
                     logging.info(f"AFK help notification. Strike {STATE.afk_counter}/{current_afk_timeout}")
                     
-                    # Send first help message to in-game
-                    api.display_message(f"Use ^3?afk reset ^7to restart afk counter", time=2)
+                    # Send first help message to in-game - BUT CHECK IF CONNECTING
+                    if not PAUSE_STATE and not CONNECTING:
+                        api.display_message(f"Use ^3?afk reset ^7to restart afk counter", time=2)
                     
-                    # Send second help message after 3 seconds
+                    # Send second help message after 3 seconds - WITH CANCELLATION CHECK
                     def send_second_help():
                         import time
                         time.sleep(3)
-                        api.display_message(f"Use ^3?afk extend ^7to extend by 5min", time=2)
+                        # CHECK IF COUNTDOWN IS STILL ACTIVE BEFORE SENDING MESSAGE
+                        if AFK_COUNTDOWN_ACTIVE and not PAUSE_STATE and not CONNECTING:
+                            api.display_message(f"Use ^3?afk extend ^7to extend by 5min", time=2)
+                        else:
+                            logging.info("AFK help message cancelled due to server connection/pause")
                     
                     import threading
                     help_thread = threading.Thread(target=send_second_help)
                     help_thread.daemon = True
                     help_thread.start()
+                    
+                    # Track the thread so we can manage it
+                    AFK_HELP_THREADS.append(help_thread)
                     
                     # Also send help to Twitch chat
                     try:
@@ -726,6 +745,9 @@ def validate_state():
             STATE.afk_counter = 0
             STATE.afk_ids = []
             IGNORE_IPS = []
+            # CANCEL ANY ACTIVE AFK COUNTDOWNS
+            AFK_COUNTDOWN_ACTIVE = False
+            AFK_HELP_THREADS.clear()
             # DO NOT reset timeout when player becomes active - keep extended timeout until player switch
             # The timeout will only be reset when switching to a different player (handled above)
 
@@ -752,20 +774,35 @@ def connect(ip, caller=None):
     global IGNORE_IPS
     global CURRENT_IP
     global RECONNECTED_CHECK
+    global AFK_COUNTDOWN_ACTIVE
+    global AFK_HELP_THREADS
+
+    # ABORT ALL AFK COUNTDOWNS AND HELP MESSAGES IMMEDIATELY
+    AFK_COUNTDOWN_ACTIVE = False  # This will stop any running countdown threads
+    
+    # Cancel any pending AFK help messages
+    for thread in AFK_HELP_THREADS:
+        if thread.is_alive():
+            logging.info("Cancelling AFK help thread due to server connection")
+            # Threads will check AFK_COUNTDOWN_ACTIVE flag and exit
+    AFK_HELP_THREADS.clear()
 
     STATE_INITIALIZED = False
     logging.info(f"Connecting to {ip}...")
     PAUSE_STATE = True
     CONNECTING = True
-    STATE.idle_counter = 0
-    STATE.afk_counter = 0
-    STATE.afk_ids = []
+    
+    if STATE:  # Check if STATE exists before accessing it
+        STATE.idle_counter = 0
+        STATE.afk_counter = 0
+        STATE.afk_ids = []
+    
     if caller is not None:
-        STATE.connect_msg = f"^7Brought by ^3{caller}"
+        if STATE:
+            STATE.connect_msg = f"^7Brought by ^3{caller}"
         IGNORE_IPS = []
 
     RECONNECTED_CHECK = True
-
     CURRENT_IP = ip
 
     api.exec_command("connect " + ip, verbose=False)

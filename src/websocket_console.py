@@ -349,10 +349,28 @@ def on_ws_message(msg):
             message_text = message_text[:message_text.index(";")]
 
         if message_text.startswith("!"):  # proxy mod commands (!top, !rank, etc.)
+            # BLOCK PROXY COMMANDS DURING MAP LOADING
+            if hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE:
+                logging.info(f"Blocked proxy command during pause: {message_text}")
+                return
+                
+            if hasattr(serverstate, 'CONNECTING') and serverstate.CONNECTING:
+                logging.info(f"Blocked proxy command during connecting: {message_text}")
+                return
+                
             logging.info("proxy command received")
             api.exec_command(message_text)
             time.sleep(1)
         else:
+            # BLOCK CHAT MESSAGES DURING MAP LOADING
+            if hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE:
+                logging.info(f"Blocked websocket chat message during pause: {message_text}")
+                return
+                
+            if hasattr(serverstate, 'CONNECTING') and serverstate.CONNECTING:
+                logging.info(f"Blocked websocket chat message during connecting: {message_text}")
+                return
+                
             author = 'Guest'
             if 'author' in message['message']:
                 author = message['message']['author']

@@ -131,6 +131,10 @@ async def event_message(ctx):
         time.sleep(debounce)
 
     elif message.startswith(">") or message.startswith("<"):  # chat bridge
+        if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+            logging.info(f"Blocked chat bridge message during pause/connecting: {message}")
+            return
+            
         message = message.lstrip('>').lstrip('<').lstrip(' ')
         blacklisted_words = config.get_list("blacklist_chat")
 
