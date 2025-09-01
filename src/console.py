@@ -42,6 +42,59 @@ ERROR_FILTERS = {
     "Server connection timed out": "RECONNECT"
 }
 
+# System message patterns that should be filtered out completely
+SYSTEM_MESSAGE_PATTERNS = [
+    "------ Server Initialization ------",
+    "------- Game Initialization -------",
+    "-----------------------------------",
+    "---------------------------",  # Added this missing pattern
+    "----- Server Shutdown",
+    "==== ShutdownGame ====",  # Added shutdown message
+    "Server:",
+    "gamename:",
+    "gamedate:",
+    "teams with",
+    "items registered",
+    "Loading vm file",
+    "VM file",
+    "loaded in",
+    "bytes on the hunk",
+    "arenas parsed",
+    "arenas ignored",
+    "bots parsed",
+    "VM_LoadDll",
+    "succeeded!",
+    "Loading dll file",
+    "^7[^1m^3D^1d^7] cgame-proxy",  # cgame proxy messages
+    "Missing { in info file",
+    "files in",
+    "pk3 files",
+    "Hunk_Clear: reset the hunk ok",
+    "GAMMA: hardware",
+    "texturemode:",
+    "texture bits:",
+    "picmip:",
+    "Initializing Shaders",
+    "WARNING: Ignoring shader file",
+    "Ignoring entire file",
+    "stitched",
+    "LoD cracks",
+    "loaded",
+    "faces,",
+    "meshes,",
+    "trisurfs,",
+    "flares",
+    "WARNING: light grid mismatch",
+    "found",
+    "VBO surfaces",
+    "vertexes,",
+    "indexes",
+    "CL_InitCGame:",
+    "Com_TouchMemory:",
+    "msec",
+    "test: okay"
+]
+
 def handle_map_error_with_countdown():
     """
     Handle map loading error with 60-second countdown and auto-reconnect
@@ -335,6 +388,16 @@ def is_server_msg(line, msg):
     return ':' not in data
 
 
+def is_system_message(line):
+    """Check if a line contains system initialization or shutdown messages"""
+    global SYSTEM_MESSAGE_PATTERNS
+    
+    for pattern in SYSTEM_MESSAGE_PATTERNS:
+        if pattern in line:
+            return True
+    return False
+
+
 def process_line(line):
     """
     Processes a console line into a more useful format. Extracts type (say, announcement, print) as well as author
@@ -359,6 +422,10 @@ def process_line(line):
         "timestamp": time.time()
     }
 
+    # EARLY SYSTEM MESSAGE FILTERING - Filter out system messages before any processing
+    if is_system_message(line):
+        return line_data  # Return as MISC type (won't be queued)
+
     # Skip renderer initialization messages early - be specific to avoid filtering !top results
     if any(pattern in line for pattern in [
         "R_Init", 
@@ -372,8 +439,10 @@ def process_line(line):
     # SERVERCOMMAND
 
     try:
-        # Don't log if it's a report
-        if "report written to system/reports/initialstate.txt" in line or "report written to system/reports/serverstate.txt" in line:
+        # Don't log system messages or reports
+        if (is_system_message(line) or
+            "report written to system/reports/initialstate.txt" in line or 
+            "report written to system/reports/serverstate.txt" in line):
             pass
         else:
             logging.info(f"[Q3] {line}")
@@ -543,8 +612,10 @@ def process_line(line):
 
             print_message = match.group(1)
 
-            # Filter out empty PRINT messages from varcommand displaymessage
-            if not print_message or print_message.strip() == "":
+            # ENHANCED FILTERING: Filter out empty PRINT messages AND system messages
+            if (not print_message or 
+                print_message.strip() == "" or
+                is_system_message(print_message)):
                 line_data["type"] = "MISC"  # Change to MISC so it won't be queued
                 return
 
