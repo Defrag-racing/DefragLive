@@ -197,9 +197,10 @@ def handle_ws_command(msg):
                     
                 logging.info(f"Manual spectate to {id}: AFK counter reset, player removed from AFK list")
             
-            api.exec_command(f"follow {id}")
-            serverstate.STATE.current_player_id = id  # Keep as string, don't convert to int
-            api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
+                api.exec_command(f"follow {id}")
+                serverstate.STATE.current_player_id = int(id)  # Convert to int for consistency
+                serverstate.STATE.current_player = serverstate.STATE.get_player_by_id(int(id))
+                api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
 
     if content['action'] == 'spectate_request':
         player_name = content['value']

@@ -244,7 +244,12 @@ class State:
                 break
         
         if bot_player:
-            self.current_player_id = self.bot_id  # Reset to spectate self initially
+            # Only reset current_player_id if it's invalid, don't always reset to bot_id
+            # Convert player IDs to int for proper comparison
+            player_ids = [int(p.id) for p in self.players]
+            if self.current_player_id not in player_ids:
+                self.current_player_id = self.bot_id
+                logging.info(f"Reset current_player_id to bot_id due to invalid player")
             logging.info(f"Updated bot_id from stale value to {self.bot_id}")
         
         self.current_player = self.get_player_by_id(self.current_player_id)
@@ -255,7 +260,7 @@ class State:
 
     def get_player_by_id(self, c_id):
         """Helper function for easily retrieving a player object from a client id number"""
-        id_player = [player for player in self.players if player.id == c_id]
+        id_player = [player for player in self.players if int(player.id) == int(c_id)]
         id_player = id_player[0] if len(id_player) > 0 else None
         return id_player
 
@@ -481,6 +486,7 @@ def initialize_state(force=False):
         # Create global server object
         STATE = State(secret, server_info, players, bot_id)
         STATE.current_player_id = bot_id
+        STATE.current_player = STATE.get_player_by_id(bot_id)  # Ensure current_player is set
         STATE.num_players = num_players
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
@@ -516,6 +522,21 @@ def initialize_state(force=False):
 def standby_mode_started():
     global RECONNECTED_CHECK
     logging.info("[Note] Goin on standby mode.")
+    
+    # Reset to bot when entering standby - but wait for new state to be initialized
+    # Reset to bot when entering standby
+    if STATE:
+        STATE.current_player_id = STATE.bot_id
+        STATE.current_player = None  # Will be updated when new state loads
+        logging.info("Reset current_player_id to bot_id for standby mode")
+        
+        # Notify websocket clients about the state change
+        try:
+            from websocket_console import notify_serverstate_change
+            notify_serverstate_change()
+            logging.info("Sent websocket notification for standby reset")
+        except Exception as e:
+            logging.error(f"Failed to send websocket notification: {e}")
 
     STANDBY_START_T = time.time()
     ignore_finish_standbymode = False
@@ -571,6 +592,8 @@ def validate_state():
     global RECONNECTED_CHECK
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
+    
+    old_player_id = STATE.current_player_id  # Store for timeout cleanup
     
     # EXISTING DEBUG LOGGING
     logging.info(f"DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}")
@@ -632,10 +655,14 @@ def validate_state():
 
     # Next player choice logic
     if spectating_self or spectating_nospec or spectating_afk:
-        old_player_id = STATE.current_player_id  # Store old player ID
         follow_id = random.choice(STATE.spec_ids) if STATE.spec_ids != [] else STATE.bot_id  # Find someone else to spec
 
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
+            # Reset timeout for old player back to default when switching to different player
+            if old_player_id != follow_id and old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
+                del STATE.player_afk_timeouts[str(old_player_id)]
+                logging.info(f"Reset AFK timeout for player {old_player_id} back to default (player switch)")
+
             if spectating_nospec:
                 if not PAUSE_STATE and not spectating_self:
                     # Determine WHY player is not specable for better error message
@@ -655,14 +682,14 @@ def validate_state():
                         logging.info('Player not specable. Switching...')
                         api.display_message("^7Player unavailable. Switching.")
 
-            # Reset timeout for old player back to default when switching to different player
-            if old_player_id != follow_id and old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
-                del STATE.player_afk_timeouts[str(old_player_id)]
-                logging.info(f"Reset AFK timeout for player {old_player_id} back to default (player switch)")
-
             display_player_name(follow_id)
             api.exec_command(f"follow {follow_id}")
-            STATE.idle_counter = 0  # Reset idle counter
+            STATE.current_player_id = int(follow_id)
+            STATE.current_player = STATE.get_player_by_id(int(follow_id))
+            STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
+            STATE.afk_counter = 0
+            logging.info(f"Successfully switched to player {follow_id}")
+            return  # CRITICAL: Exit validation after successful switch
 
         else:  # Only found ourselves to spec.
             if STATE.current_player_id != STATE.bot_id:  # Stop spectating player, go to free spec mode instead.
@@ -696,8 +723,7 @@ def validate_state():
                     RECONNECTED_CHECK = False
                     standby_mode_started()
 
-        STATE.current_player_id = follow_id  # Spectating someone.
-        STATE.current_player = STATE.get_player_by_id(follow_id)
+        STATE.current_player = STATE.get_player_by_id(STATE.current_player_id)
 
     else:  # AFK detection
         inputs = STATE.get_inputs()
@@ -962,17 +988,17 @@ def get_svinfo_report(filename):
             cli_id = match.group(1)
             player_data = info[header]
 
-            players.append(Player(cli_id, player_data))
+            players.append(Player(int(cli_id), player_data))
             num_players += 1
             if player_data['t'] != '3':  # Filter out spectators out of followable ids.
                 if player_data['c1'] != 'nospec' and player_data['c1'] != 'nospecpm':
                     # Filter out nospec'd players out of followable ids
-                    spec_ids.append(cli_id)
+                    spec_ids.append(int(cli_id))
                 else:
-                    nospec_ids.append(cli_id)
+                    nospec_ids.append(int(cli_id))
 
                 if player_data['c1'] == 'nospecpm':
-                    nopmids.append(cli_id)
+                    nopmids.append(int(cli_id))
 
         except:
             continue
