@@ -22,7 +22,7 @@ import threading
 def serverstate_to_json():
     data = {
         'bot_id': serverstate.STATE.bot_id,
-        'bot_secret': serverstate.STATE.secret,  # ADD THIS LINE
+        'bot_secret': serverstate.STATE.secret,
         'current_player_id': serverstate.STATE.current_player_id,
         'mapname': serverstate.STATE.mapname,
         'df_promode': serverstate.STATE.df_promode,
@@ -33,9 +33,14 @@ def serverstate_to_json():
         'players': {},
     }
 
+    if serverstate.STATE.current_player is None and serverstate.STATE.current_player_id:
+        current_player_obj = serverstate.STATE.get_player_by_id(serverstate.STATE.current_player_id)
+        if current_player_obj:
+            serverstate.STATE.current_player = current_player_obj
+
     if serverstate.STATE.current_player is not None:
         data['current_player'] = serverstate.STATE.current_player.__dict__
-
+        
         if 'n' in data['current_player']:
             data['current_player']['n'] = filters.filter_author(data['current_player']['n'])
 
