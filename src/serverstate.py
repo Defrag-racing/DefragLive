@@ -30,8 +30,8 @@ import time
 
 # Configurable variables, Strike = 2seconds
 MESSAGE_REPEATS = 1  # How many times to spam info messages. 0 for no messages.
-#AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
-AFK_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Switch after afk detected x consecutive times.
+AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
+#AFK_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Switch after afk detected x consecutive times.
 IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
