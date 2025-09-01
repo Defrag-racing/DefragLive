@@ -25,7 +25,7 @@ with open("bot_pid.txt", "w") as f:
 
 # Daily restart variables
 LAST_TIME = ""
-RESTART_TIMESTAMP = "04"
+RESTART_TIMESTAMP = "04:00"
 
 df_channel = environ['CHANNEL'] if 'CHANNEL' in environ and environ['CHANNEL'] != "" else input("Your twitch channel name: ")
 
@@ -261,12 +261,12 @@ if __name__ == "__main__":
     bot_thread.start()
 
     while True:
-        timestamp = time.strftime('%H')
+        timestamp = time.strftime('%H:%M')
 
         if (timestamp == RESTART_TIMESTAMP):
             day = datetime.today().weekday()
             current_restart_time = str(day) + " " + timestamp
-
+            
             if LAST_TIME != current_restart_time:
                 LAST_TIME = current_restart_time
                 api.exec_command("quit")

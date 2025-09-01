@@ -30,7 +30,8 @@ import time
 
 # Configurable variables, Strike = 2seconds
 MESSAGE_REPEATS = 1  # How many times to spam info messages. 0 for no messages.
-AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
+#AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
+AFK_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Switch after afk detected x consecutive times.
 IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
@@ -230,9 +231,22 @@ class State:
         return str(self.__class__) + ": " + str(self.__dict__)
 
     def update_info(self, server_info):
-        """Helper function for resetting the class's properties on state referesh"""
+        """Helper function for resetting the class's properties on state refresh"""
         for key in server_info:
             setattr(self, key.replace('sv_', ''), server_info[key])
+        
+        # FIX: Find the actual bot player by the secret code and update bot_id
+        bot_player = None
+        for player in self.players:
+            if player.c1 == self.secret:  # Bot player has the secret as color1
+                bot_player = player
+                self.bot_id = player.id  # Update bot_id to new server's ID
+                break
+        
+        if bot_player:
+            self.current_player_id = self.bot_id  # Reset to spectate self initially
+            logging.info(f"Updated bot_id from stale value to {self.bot_id}")
+        
         self.current_player = self.get_player_by_id(self.current_player_id)
         if self.bot_id in self.spec_ids:
             self.spec_ids.remove(self.bot_id)
@@ -557,6 +571,24 @@ def validate_state():
     global RECONNECTED_CHECK
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
+    
+    # EXISTING DEBUG LOGGING
+    logging.info(f"DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}")
+    logging.info(f"DEBUG: spectating_self check: {STATE.current_player_id == STATE.bot_id}")
+    if STATE.current_player:
+        logging.info(f"DEBUG: current_player name: {STATE.current_player.n}")
+    else:
+        logging.info("DEBUG: current_player is None")
+    
+    logging.info(f"DEBUG: spec_ids={STATE.spec_ids}")
+    logging.info(f"DEBUG: nospec_ids={STATE.nospec_ids}")
+    logging.info(f"DEBUG: total players={len(STATE.players)}")
+    for player in STATE.players:
+        logging.info(f"DEBUG: Player {player.id}: {player.n}, team={player.t}, c1={player.c1}")
+    
+    # ADD THESE NEW DEBUG LINES HERE:
+    logging.info(f"DEBUG: Looking for player with ID {STATE.current_player_id}")
+    logging.info(f"DEBUG: get_player_by_id result: {STATE.get_player_by_id(STATE.current_player_id)}")
     
     # Wrap the team check in try-catch to prevent crashing the main loop
     try:
