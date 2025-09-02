@@ -131,6 +131,9 @@ def hold_key(x, duration):
         except:
             pass  # If this fails too, at least we tried
 
+def display_message(message, time=3, y_pos=140, size=10):
+    """Display a message using the game's displaymessage command"""
+    exec_command(f"cg_centertime {time};displaymessage {y_pos} {size} {message}")
 
 def reset_visuals():
     exec_command(f"df_chs1_Info6 0;r_picmip 0;r_gamma 1;r_mapoverbrightbits 2;df_mp_NoDrawRadius 100;cg_drawgun 1")
