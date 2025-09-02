@@ -25,23 +25,35 @@ class WindowNotFoundError(Exception):
 
 
 def api_init():
-    """Grab both engine and console windows. Thanks to run for this code"""
+    """Grab both engine and console windows with better error handling"""
     global CONSOLE
     global WINDOW
 
-    if environ["DEVELOPMENT"]:
-        CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW +
-                   "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
-                   "\nFileAppend, %console%, * ;", blocking=True)
-    else:
-        CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW + \
-                    "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
-                    "\nWinHide," + CONSOLEWINDOW +
-                    "\nFileAppend, %console%, * ;", blocking=True)
-    WINDOW = AHK.find_window(title="TwitchBot Engine")
-
-    if CONSOLE is None or WINDOW is None:
-        raise WindowNotFoundError
+    try:
+        # Existing console setup code...
+        if environ["DEVELOPMENT"]:
+            CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW +
+                       "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
+                       "\nFileAppend, %console%, * ;", blocking=True)
+        else:
+            CONSOLE = AHK.run_script("WinShow," + CONSOLEWINDOW + \
+                        "\nControlGet, console, Hwnd ,, Edit1, " + CONSOLEWINDOW +
+                        "\nWinHide," + CONSOLEWINDOW +
+                        "\nFileAppend, %console%, * ;", blocking=True)
+        
+        WINDOW = AHK.find_window(title="TwitchBot Engine")
+        
+        # Better validation
+        if CONSOLE is None:
+            raise WindowNotFoundError("Console window not found")
+        if WINDOW is None:
+            raise WindowNotFoundError("Engine window not found") 
+        if not WINDOW.exists:
+            raise WindowNotFoundError("Engine window exists but is not accessible")
+            
+    except Exception as e:
+        logging.error(f"Window initialization failed: {e}")
+        raise WindowNotFoundError(f"Could not initialize windows: {e}")
 
 
 def exec_command(cmd, verbose=True):
@@ -74,26 +86,50 @@ def press_key(key, verbose=True):
     try:
         if verbose:
             logging.info(f"Pressing key {key}")
+        
+        # Add window validation before sending
+        if not WINDOW or not WINDOW.exists:
+            logging.info(f"Window not found or inactive. {key} was not sent.")
+            return
+            
+        # Verify window is still the game window
+        if "TwitchBot Engine" not in WINDOW.title:
+            logging.info(f"Window title changed. {key} was not sent to prevent leaking.")
+            return
+            
         WINDOW.send(key, blocking=True, press_duration=30)
-    except AttributeError:
-        logging.info(f"Window not active. {key} was not sent to the client.")
-
-
-def display_message(message, time=3, y_pos=140, size=10):
-    exec_command(f"cg_centertime {time};displaymessage {y_pos} {size} {message}")
+        
+    except (AttributeError, Exception) as e:
+        logging.info(f"Failed to send key {key}: {e}. Window may not be active.")
 
 
 def hold_key(x, duration):
     try:
         logging.info(f"Holding {x} for {duration} seconds")
-        # Send key down
+        
+        # Add window validation
+        if not WINDOW or not WINDOW.exists:
+            logging.info(f"Window not found. {x} hold cancelled.")
+            return
+            
+        if "TwitchBot Engine" not in WINDOW.title:
+            logging.info(f"Wrong window active. {x} hold cancelled.")
+            return
+        
+        # Send key down to specific window
         WINDOW.send(x, blocking=True)
-        # Wait for the specified duration
         time.sleep(duration)
-        # Send key up (using AutoHotkey to release the key)
-        AHK.run_script(f"Send {{{x} up}}", blocking=True)
-    except AttributeError:
-        logging.info(f"Window not active. {x} was not sent to the client.")
+        
+        # Use window-specific key release instead of global AHK script
+        WINDOW.send(f"{x} up", blocking=True)
+        
+    except (AttributeError, Exception) as e:
+        logging.info(f"Failed to hold key {x}: {e}. Window interaction failed.")
+        # Ensure key is released even if there's an error
+        try:
+            AHK.run_script(f"Send {{{x} up}}", blocking=True)
+        except:
+            pass  # If this fails too, at least we tried
 
 
 def reset_visuals():
