@@ -224,7 +224,7 @@ def handle_settings_command(content):
 def serverstate_to_json():
     data = {
         'bot_id': serverstate.STATE.bot_id,
-        'bot_secret': serverstate.STATE.secret,  # ADD THIS LINE
+        'bot_secret': serverstate.STATE.secret,
         'current_player_id': serverstate.STATE.current_player_id,
         'mapname': serverstate.STATE.mapname,
         'df_promode': serverstate.STATE.df_promode,
@@ -240,6 +240,8 @@ def serverstate_to_json():
 
         if 'n' in data['current_player']:
             data['current_player']['n'] = filters.filter_author(data['current_player']['n'])
+    else:
+        data['current_player'] = None  # ADD THIS LINE - explicitly set to None
 
     for pl in serverstate.STATE.players:
         pl_dict = pl.__dict__
