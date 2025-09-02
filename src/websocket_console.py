@@ -46,8 +46,19 @@ def execute_settings_command(content):
     logging.info(f'[SETTINGS] Received command: {content["command"]}')
     
     try:
-        api.exec_command(content["command"])
-        logging.info(f'[SETTINGS] Executed: {content["command"]}')
+        command = content["command"]
+        
+        # Check if this is a vid_restart command
+        if command == "vid_restart":
+            logging.info("[SETTINGS] Executing vid_restart - setting VID_RESTARTING flag")
+            # Set the flag BEFORE executing the command
+            import serverstate
+            serverstate.VID_RESTARTING = True
+            serverstate.PAUSE_STATE = True
+        
+        api.exec_command(command)
+        logging.info(f'[SETTINGS] Executed: {command}')
+        
     except Exception as e:
         logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
 
