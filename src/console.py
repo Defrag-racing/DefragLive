@@ -584,6 +584,34 @@ def process_line(line):
                 # Reset timer when pause state is cleared
                 PAUSE_STATE_START_TIME = None
 
+        if (line.startswith('Com_TouchMemory:') or 
+            ('entered the game.' in line and serverstate.PAUSE_STATE and 
+             not serverstate.CONNECTING and not serverstate.VID_RESTARTING)):
+            
+            # If we're paused but not connecting/restarting, and players are entering
+            # This likely means a map change completed but we missed the normal unpause trigger
+            if serverstate.PAUSE_STATE:
+                logging.info("Map change detected via player entry - unpausing state")
+                time.sleep(2)  # Brief delay to let map fully load
+                api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+                serverstate.initialize_state(True)
+                serverstate.PAUSE_STATE = False
+                # Reset timer when pause state is cleared
+                PAUSE_STATE_START_TIME = None
+
+        # TIMEOUT FALLBACK - unpause after extended pause (emergency recovery)
+        if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is not None:
+            pause_duration = time.time() - PAUSE_STATE_START_TIME
+            if pause_duration > 50:  # 2 minutes timeout
+                logging.warning(f"State paused for {pause_duration:.0f}s - forcing unpause (emergency recovery)")
+                try:
+                    api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+                    serverstate.initialize_state(True)
+                    serverstate.PAUSE_STATE = False
+                    PAUSE_STATE_START_TIME = None
+                except Exception as e:
+                    logging.error(f"Emergency unpause failed: {e}")
+
         def parse_chat_message(command):
             # CHAT MESSAGE (BY PLAYER)
             chat_message_r = r"(.*)\^7: \^\d(.*)"

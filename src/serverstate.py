@@ -40,6 +40,7 @@ LAST_TEAM_CHECK_TIME = 0
 TEAM_CHECK_INTERVAL = 30  # Check every 30 seconds
 AFK_COUNTDOWN_ACTIVE = False
 AFK_HELP_THREADS = []  # Track active help threads
+LAST_GREETING_SERVER = None  # Track which server we last sent greeting to
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -618,6 +619,8 @@ def initialize_state(force=False):
     global LAST_TIME
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
+    global LAST_GREETING_SERVER
+    global CURRENT_IP
 
     # RESET AFK FLAGS ON INITIALIZATION
     AFK_COUNTDOWN_ACTIVE = False
@@ -660,6 +663,8 @@ def initialize_state(force=False):
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
         time.sleep(3)
+        
+        # Handle nospec notifications
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
                 # Send one-time message to nospecpm players
@@ -669,15 +674,27 @@ def initialize_state(force=False):
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
-        if STATE_INITIALIZED:
-            # Schedule nationality-based greeting message
+
+        # ONLY send greeting if this is a NEW server (not reconnection to same server)
+        if STATE_INITIALIZED and LAST_GREETING_SERVER is not None and CURRENT_IP != LAST_GREETING_SERVER:
+            LAST_GREETING_SERVER = CURRENT_IP  # Mark this server as having received greeting
+            logging.info(f"Server change detected - scheduling greeting for {CURRENT_IP}")
+            
             import threading
             def delayed_nationality_greeting():
                 import time
                 time.sleep(5)  # Wait 5 seconds after connection
                 send_nationality_greeting(STATE.ip)
+            
             greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
             greeting_thread.start()
+        elif LAST_GREETING_SERVER is None:
+            # First startup - just mark the server without sending greeting
+            LAST_GREETING_SERVER = CURRENT_IP
+            logging.info(f"Bot startup - marked initial server {CURRENT_IP} (no greeting)")
+        elif CURRENT_IP == LAST_GREETING_SERVER:
+            logging.info(f"Reconnection to same server {CURRENT_IP} - skipping greeting")
+        
     except Exception as e:
         logging.error(f"State initialization failed: {e}")
         return False
@@ -1004,6 +1021,7 @@ def connect(ip, caller=None):
     global RECONNECTED_CHECK
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
+    global LAST_GREETING_SERVER
 
     # ABORT ALL AFK COUNTDOWNS AND HELP MESSAGES IMMEDIATELY
     AFK_COUNTDOWN_ACTIVE = False  # This will stop any running countdown threads
@@ -1014,6 +1032,9 @@ def connect(ip, caller=None):
             logging.info("Cancelling AFK help thread due to server connection")
             # Threads will check AFK_COUNTDOWN_ACTIVE flag and exit
     AFK_HELP_THREADS.clear()
+
+    # Check if this is a NEW server connection or reconnection to same server
+    is_new_server = (CURRENT_IP != ip)
 
     STATE_INITIALIZED = False
     logging.info(f"Connecting to {ip}...")
@@ -1032,6 +1053,12 @@ def connect(ip, caller=None):
 
     RECONNECTED_CHECK = True
     CURRENT_IP = ip
+
+    # Store whether this should trigger a greeting (only for new servers)
+    if is_new_server:
+        logging.info(f"New server connection detected: {ip}")
+    else:
+        logging.info(f"Reconnecting to same server: {ip}")
 
     api.exec_command("connect " + ip, verbose=False)
 
