@@ -90,6 +90,139 @@ GREETING_MESSAGES = [
     "^6Aloha ^7fraggers! ^3{count} ^7people are here to witness your ^2legendary runs^7!"
 ]
 
+# Nationality-specific greetings
+NATIONALITY_GREETINGS = {
+    'DE': [
+        "^2Guten Tag ^7everyone! ^3{count} ^7viewers joined to see some ^2German engineering ^7in defrag! ^1:)",
+        "^4Hallo ^7fraggers! ^2{count} ^7people are here to witness some ^3Deutsch precision^7!",
+        "^5Servus ^7speed demons! ^3{count} ^7viewers came for the ^2legendary German efficiency^7! ^4:P"
+    ],
+    'RU': [
+        "^1Privet ^7comrades! ^2{count} ^7viewers arrived for some ^3Russian strafe mastery^7! ^5:)",
+        "^3Zdravstvuyte ^7legends! ^1{count} ^7people joined to see ^2Eastern European excellence^7!",
+        "^6Da da da! ^7^3{count} ^7viewers are here for some ^4Soviet-level movement^7! ^2:P"
+    ],
+    'FR': [
+        "^5Bonjour ^7mes amis! ^2{count} ^7viewers joined for some ^3French finesse^7! ^4:)",
+        "^1Salut ^7fraggers! ^3{count} ^7people are here to see ^2Gallic grace ^7in motion!",
+        "^4Bonsoir ^7speed artists! ^2{count} ^7viewers came for ^6French flair^7! ^3:P"
+    ],
+    'US': [
+        "^1Howdy ^7y'all! ^3{count} ^7viewers just rolled up for some ^2American awesomeness^7! ^4:)",
+        "^2What's up ^7USA! ^1{count} ^7people joined for some ^3Stars and Stripes strafing^7!",
+        "^6Hey there ^7Americans! ^2{count} ^7viewers are here for that ^4freedom movement^7! ^5:P"
+    ],
+    'PL': [
+        "^4Cześć ^7Polish legends! ^2{count} ^7viewers joined for some ^3Slavic supremacy^7! ^1:)",
+        "^6Witajcie ^7speed demons! ^3{count} ^7people are here for ^2Polish power^7!",
+        "^1Siema ^7fraggers! ^2{count} ^7viewers came to witness ^5Polish perfection^7! ^4:P"
+    ],
+    'SE': [
+        "^3Hej ^7Swedish vikings! ^2{count} ^7viewers sailed in for ^1Nordic navigation^7! ^5:)",
+        "^6Tjena ^7Scandinavian speedsters! ^3{count} ^7people joined for ^4Swedish smoothness^7!",
+        "^2Hallå ^7ice kings! ^1{count} ^7viewers are here for ^6Nordic excellence^7! ^4:P"
+    ],
+    'GB': [
+        "^5Cheerio ^7British legends! ^2{count} ^7viewers joined for some ^3proper English movement^7! ^1:)",
+        "^4Blimey ^7UK fraggers! ^3{count} ^7people are here for ^6British brilliance^7!",
+        "^1Oi oi ^7speed merchants! ^2{count} ^7viewers came for ^4Queen's English strafing^7! ^5:P"
+    ],
+    'NL': [
+        "^6Hallo ^7Dutch masters! ^3{count} ^7viewers joined for some ^2Netherlands navigation^7! ^4:)",
+        "^2Gezellig ^7Orange army! ^1{count} ^7people are here for ^5Dutch dynamics^7!",
+        "^4Goedendag ^7fraggers! ^2{count} ^7viewers came for ^3Holland highlights^7! ^6:P"
+    ],
+    'FI': [
+        "^1Hei ^7Finnish fighters! ^3{count} ^7viewers joined for some ^2Nordic navigation^7! ^5:)",
+        "^5Terve ^7Suomi speedsters! ^2{count} ^7people came for ^4Finnish finesse^7!",
+        "^3Moi ^7ice warriors! ^1{count} ^7viewers are here for ^6Arctic excellence^7! ^4:P"
+    ],
+    'NO': [
+        "^4Hei ^7Norwegian vikings! ^2{count} ^7viewers sailed in for ^3fjord-level movement^7! ^1:)",
+        "^6Takk ^7Nordic legends! ^3{count} ^7people joined for ^5Norwegian navigation^7!",
+        "^2Hyggelig ^7speed demons! ^1{count} ^7viewers are here for ^4Viking velocity^7! ^5:P"
+    ]
+}
+
+
+def get_dominant_nationality(server_data):
+    """
+    Analyze server data to find the most common nationality
+    Returns the country code of the dominant nationality, or None if no clear winner
+    """
+    if 'players' not in server_data or not server_data['players']:
+        return None
+    
+    country_counts = {}
+    total_players = 0
+    
+    # Count countries (excluding the bot)
+    for player_id, player_data in server_data['players'].items():
+        if isinstance(player_data, dict) and 'country' in player_data:
+            # Skip the bot (DefragLive)
+            player_name = player_data.get('name', '').lower()
+            if 'defrag.live' in player_name or 'defraglive' in player_name:
+                continue
+                
+            country = player_data['country']
+            country_counts[country] = country_counts.get(country, 0) + 1
+            total_players += 1
+    
+    if total_players == 0:
+        return None
+    
+    # Find the most common country
+    dominant_country = max(country_counts, key=country_counts.get)
+    dominant_count = country_counts[dominant_country]
+    
+    # Only return if it represents at least 50% of players (or at least 2 players)
+    if dominant_count >= max(2, total_players * 0.5):
+        return dominant_country
+    
+    return None
+
+def send_nationality_greeting(server_ip):
+    """
+    Send a nationality-specific greeting based on server composition
+    """
+    try:
+        # Fetch server data
+        import requests
+        url = 'https://defrag.racing/servers/json'
+        response = requests.get(url, timeout=5)
+        servers_data = response.json()
+        
+        # Add default port if not present
+        api_ip = server_ip if ':' in server_ip else f"{server_ip}:27960"
+        
+        if 'active' not in servers_data or api_ip not in servers_data['active']:
+            # Fallback to regular greeting
+            send_auto_greeting()
+            return
+        
+        server_data = servers_data['active'][api_ip]
+        dominant_country = get_dominant_nationality(server_data)
+        
+        if dominant_country and dominant_country in NATIONALITY_GREETINGS:
+            # Use nationality-specific greeting
+            viewer_count = get_twitch_viewer_count()
+            if viewer_count < 1:
+                viewer_count = random.randint(1, 5)
+            
+            greeting_template = random.choice(NATIONALITY_GREETINGS[dominant_country])
+            greeting_message = greeting_template.format(count=viewer_count)
+            
+            logging.info(f"Sending nationality greeting for {dominant_country}: {greeting_message}")
+            api.exec_command(f"say {greeting_message}")
+        else:
+            # Fallback to regular greeting
+            send_auto_greeting()
+            
+    except Exception as e:
+        logging.error(f"Error sending nationality greeting: {e}")
+        # Fallback to regular greeting
+        send_auto_greeting()
+
 # World record celebration messages
 WORLD_RECORD_MESSAGES = [
     "^1HOLY MOLY! ^7We just witnessed ^3HISTORY ^7being made! ^2What a legendary run! ^5:))",
@@ -106,7 +239,43 @@ WORLD_RECORD_MESSAGES = [
     "^6WORLD CLASS! ^7That wasn't just a run, that was ^3ART^7! ^2PHENOMENAL performance! ^5:P",
     "^1MAGICAL! ^7The universe conspired to create this ^3PERFECT MOMENT^7! ^6AMAZING! ^4:))",
     "^2TRANSCENDENT! ^7We witnessed something ^3BEYOND HUMAN^7! ^5Absolutely MAGNIFICENT! ^1:)",
-    "^3SUBLIME! ^7That run had everything - ^2skill, precision, and HEART^7! ^4INCREDIBLE! ^6:P"
+    "^3SUBLIME! ^7That run had everything - ^2skill, precision, and HEART^7! ^4INCREDIBLE! ^6:P",
+    "^1INSANE! ^7That movement was ^3OUT OF THIS WORLD^7! ^2Absolutely MINDBLOWING! ^5:D",
+    "^2EPIC WIN! ^7We just witnessed ^3DEFRAG PERFECTION^7! ^4LEGENDARY status achieved! ^6:P",
+    "^3BONKERS! ^7That was ^1COMPLETELY MENTAL^7! ^5The physics gods smiled today! ^2:))",
+    "^4GODLIKE! ^7Movement like that is ^3ONCE IN A LIFETIME^7! ^6SPECTACULAR! ^1:D",
+    "^5UNTOUCHABLE! ^7That run was ^2ABSOLUTE PERFECTION^7! ^3Nobody else even comes close! ^4:)",
+    "^6FLAWLESS VICTORY! ^7Every single pixel was ^1PERFECTLY CALCULATED^7! ^2GENIUS! ^5:P",
+    "^1NEXT LEVEL! ^7That wasn't just fast, that was ^3TRANSCENDENT^7! ^4UNREAL! ^6:))",
+    "^2PURE EXCELLENCE! ^7Movement so smooth it looked ^3EFFORTLESS^7! ^5MASTERFUL! ^1:D",
+    "^3MIND-MELTING! ^7We just saw the ^4IMPOSSIBLE^7 become reality! ^6EXTRAORDINARY! ^2:P",
+    "^4BREATHTAKING! ^7That run left everyone ^1ABSOLUTELY STUNNED^7! ^3PHENOMENAL! ^5:)",
+    "^5GAME CHANGER! ^7Movement like that ^2REDEFINES THE POSSIBLE^7! ^6INCREDIBLE! ^1:D",
+    "^6OTHERWORLDLY! ^7That wasn't human, that was ^3PURE ARTISTRY^7! ^4MAGNIFICENT! ^2:))",
+    "^1DEMOLITION! ^7The previous record got ^5COMPLETELY OBLITERATED^7! ^3SAVAGE! ^6:P",
+    "^2UNSTOPPABLE! ^7Movement so clean it looked ^4COMPUTER-GENERATED^7! ^1PERFECT! ^5:D",
+    "^3LEGENDARY STATUS! ^7That run will be remembered ^2FOREVER^7! ^6HISTORIC! ^4:)",
+    "^4REALITY BENDING! ^7Physics laws were ^1COMPLETELY IGNORED^7! ^3SUPERNATURAL! ^2:P",
+    "^5MASTERPIECE! ^7Every strafe was ^6PIXEL-PERFECT^7! ^4ARTISTIC BRILLIANCE! ^1:D",
+    "^6GODMODE ACTIVATED! ^7That movement was ^3ABSOLUTELY DIVINE^7! ^5CELESTIAL! ^2:))",
+    "^1NUCLEAR! ^7That run just ^4EXPLODED^7 the leaderboards! ^3DEVASTATING! ^6:P",
+    "^2UNTAMED! ^7Raw skill like that is ^5COMPLETELY WILD^7! ^1FEROCIOUS! ^4:D",
+    "^3SILKY SMOOTH! ^7Movement so fluid it was ^6HYPNOTIC^7! ^2MESMERIZING! ^5:)",
+    "^4STRATOSPHERIC! ^7That performance was ^1SKY-HIGH^7 quality! ^3ASTRONOMICAL! ^6:P",
+    "^5FLAWLESS EXECUTION! ^7Not a single wasted movement! ^2CLINICAL PRECISION! ^4:D",
+    "^6MIND-BOGGLING! ^7Speed and accuracy beyond ^3HUMAN COMPREHENSION^7! ^1SURREAL! ^5:)",
+    "^1RECORD ANNIHILATION! ^7The old time got ^4COMPLETELY VAPORIZED^7! ^6RUTHLESS! ^2:P",
+    "^2PURE VELOCITY! ^7Movement so fast it ^5BROKE THE SOUND BARRIER^7! ^3SONIC! ^4:D",
+    "^3SURGICAL PRECISION! ^7Every angle calculated to ^1MATHEMATICAL PERFECTION^7! ^6GENIUS! ^5:)",
+    "^4LIGHTNING STRIKE! ^7That run hit with ^2ELECTRIFYING SPEED^7! ^3THUNDEROUS! ^1:P",
+    "^5DEFRAG DEITY! ^7Movement blessed by the ^6STRAFE JUMPING GODS^7! ^4DIVINE! ^2:D",
+    "^6REALITY CHECK! ^7What we just saw ^1SHOULDN'T BE POSSIBLE^7! ^5MIRACULOUS! ^3:)",
+    "^1ABSOLUTE MADNESS! ^7That level of skill is ^4COMPLETELY INSANE^7! ^2BONKERS! ^6:P",
+    "^2MOVEMENT POETRY! ^7Every strafe told a ^3BEAUTIFUL STORY^7! ^5ARTISTIC! ^1:D",
+    "^3SPEED DEMON! ^7That runner just ^6POSSESSED^7 the map! ^4SUPERNATURAL! ^2:)",
+    "^4PERFECTION ACHIEVED! ^7The ^1ULTIMATE RUN^7 has been witnessed! ^5FLAWLESS! ^3:P",
+    "^5LEGENDARY BEAST! ^7Movement so wild it ^2TAMED THE IMPOSSIBLE^7! ^6UNTAMED! ^4:D",
+    "^6QUANTUM LEAP! ^7That run just ^3TELEPORTED^7 into the history books! ^1FUTURISTIC! ^5:)"
 ]
 
 # Rate limiting for world records
@@ -304,13 +473,13 @@ class State:
             api.exec_command(f"say {self.connect_msg}")
             self.connect_msg = None
         
-        # Add auto greeting after custom connect message
-        # Wait a bit to avoid message spam
-        def delayed_greeting():
+        # Add nationality-based greeting after custom connect message
+        def delayed_nationality_greeting():
+            import time
             time.sleep(3)  # 3 second delay
-            send_auto_greeting()
+            send_nationality_greeting(self.ip)  # Use the current server IP
         
-        greeting_thread = threading.Thread(target=delayed_greeting, daemon=True)
+        greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
         greeting_thread.start()
 
     def init_vote(self):
@@ -501,13 +670,13 @@ def initialize_state(force=False):
             time.sleep(1)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
         if STATE_INITIALIZED:
-            # Schedule auto greeting message
+            # Schedule nationality-based greeting message
             import threading
-            def delayed_auto_greeting():
+            def delayed_nationality_greeting():
                 import time
                 time.sleep(5)  # Wait 5 seconds after connection
-                send_auto_greeting()
-            greeting_thread = threading.Thread(target=delayed_auto_greeting, daemon=True)
+                send_nationality_greeting(STATE.ip)
+            greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
             greeting_thread.start()
     except Exception as e:
         logging.error(f"State initialization failed: {e}")
@@ -1067,7 +1236,7 @@ def send_world_record_celebration(player_name=None, record_time=None):
     global LAST_WR_MESSAGE_TIME
     
     try:
-        current_time = time.time()  # Now this works correctly
+        current_time = time.time()
         
         # Check if we're within cooldown period
         if current_time - LAST_WR_MESSAGE_TIME < WR_MESSAGE_COOLDOWN:
@@ -1092,24 +1261,20 @@ def send_world_record_celebration(player_name=None, record_time=None):
         else:
             celebration_message = celebration_template
         
-        # Add player name and time if provided
-        if player_name and record_time:
-            celebration_message = f"{celebration_message} ^3{player_name}^7 with ^2{record_time}^7!"
-        
-        # Send to game chat
+        # Send to game chat (NO PLAYER NAME OR TIME ADDED)
         logging.info(f"Sending server record celebration: {celebration_message}")
         api.exec_command(f"say {celebration_message}")
         
-        # Also send a display message for extra emphasis
-        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD! ^7{player_name or 'Someone'} with ^2{record_time or 'an epic time'}^7!")
+        # Also send a display message for extra emphasis (NO PLAYER NAME OR TIME)
+        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD BROKEN! ^7Epic performance witnessed!")
         
-        # Send notification to Twitch chat via websocket
+        # Send notification to Twitch chat via websocket (NO PLAYER NAME OR TIME)
         try:
             import console
             import json
             wr_notification = {
                 'action': 'server_record_celebration',
-                'message': f"SERVER RECORD BROKEN by {player_name or 'someone'} with {record_time or 'an epic time'}! The chat is going wild!"
+                'message': f"SERVER RECORD BROKEN! The chat is going absolutely wild!"
             }
             console.WS_Q.put(json.dumps(wr_notification))
         except Exception as e:
@@ -1122,7 +1287,7 @@ def handle_world_record_event(player_name=None, record_time=None):
     """
     Call this function when a server/world record is detected/broken
     """
-    logging.info(f"Server record detected! Triggering celebration for {player_name or 'unknown player'} with time {record_time or 'unknown time'}.")
+    logging.info("Server record detected! Triggering celebration.")
     send_world_record_celebration(player_name, record_time)
     # Try to play sound, with error handling
     sound_file = 'worldrecord.wav'
