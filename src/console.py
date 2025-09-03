@@ -18,6 +18,7 @@ import dfcommands as cmd
 import filters
 import serverstate
 import servers
+import websocket_console
 
 LOG = []
 CONSOLE_DISPLAY = []
@@ -601,7 +602,8 @@ def process_line(line):
                         logging.info("Synced settings to VPS after vid_restart")
                     except Exception as e:
                         logging.error(f"Failed to sync settings after vid_restart: {e}")
-                
+                websocket_console.process_queued_settings()
+
                 import threading
                 sync_thread = threading.Thread(target=delayed_settings_sync)
                 sync_thread.daemon = True
@@ -624,7 +626,8 @@ def process_line(line):
                         logging.info("Synced settings to VPS after game restart")
                     except Exception as e:
                         logging.error(f"Failed to sync settings after restart: {e}")
-                
+                websocket_console.process_queued_settings()
+
                 import threading
                 sync_thread = threading.Thread(target=delayed_settings_sync)
                 sync_thread.daemon = True

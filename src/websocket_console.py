@@ -56,8 +56,32 @@ def execute_settings_command(content):
             serverstate.VID_RESTARTING = True
             serverstate.PAUSE_STATE = True
         
+        # Execute the setting command
         api.exec_command(command)
         logging.info(f'[SETTINGS] Executed: {command}')
+        
+        # NEW: Write config immediately after setting command to ensure it's saved
+        if command != "vid_restart":
+            api.exec_command("writeconfig settings-current.cfg")
+            logging.info("[SETTINGS] Wrote config after command execution")
+        
+        # NEW: Auto-sync settings back to extension after command execution
+        # Wait a moment for the command to take effect, then sync
+        import threading
+        def delayed_settings_sync():
+            import time
+            time.sleep(0.5)  # Wait for command to take effect
+            try:
+                sync_current_settings_to_vps()
+                logging.info("[SETTINGS] Auto-synced settings after command execution")
+            except Exception as e:
+                logging.error(f"[SETTINGS] Failed to auto-sync settings: {e}")
+        
+        # Don't sync for vid_restart commands (they'll sync automatically when restart completes)
+        if command != "vid_restart":
+            sync_thread = threading.Thread(target=delayed_settings_sync)
+            sync_thread.daemon = True
+            sync_thread.start()
         
     except Exception as e:
         logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
@@ -74,6 +98,21 @@ def process_queued_settings():
         
         SETTINGS_QUEUE.clear()
         logging.info("[SETTINGS] Finished processing queued settings commands")
+        
+        # NEW: Sync settings after processing all queued commands
+        import threading
+        def delayed_queue_sync():
+            import time
+            time.sleep(1)  # Wait for all commands to take effect
+            try:
+                sync_current_settings_to_vps()
+                logging.info("[SETTINGS] Synced settings after processing queued commands")
+            except Exception as e:
+                logging.error(f"[SETTINGS] Failed to sync after queue processing: {e}")
+        
+        sync_thread = threading.Thread(target=delayed_queue_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
 
 def get_current_game_settings():
     """Get current game settings by reading the config file"""
@@ -206,9 +245,9 @@ def sync_current_settings_to_vps():
         current_settings = get_current_game_settings()
         
         if current_settings:
-            # Send to VPS
+            # Send to VPS - use 'sync_settings' to match what VPS bridge expects
             sync_message = {
-                'action': 'sync_settings',
+                'action': 'sync_settings',  # VPS bridge expects this action name
                 'settings': current_settings,
                 'source': 'defrag_bot'
             }
@@ -220,17 +259,6 @@ def sync_current_settings_to_vps():
         
     except Exception as e:
         logging.error(f"[SETTINGS] Failed to sync settings to VPS: {e}")
-
-def handle_settings_command(content):
-    """Handle settings command from VPS"""
-    logging.info(f'[SETTINGS] Received command: {content["command"]}')
-    
-    try:
-        # Execute the console command in the game
-        api.exec_command(content["command"])
-        logging.info(f'[SETTINGS] Executed: {content["command"]}')
-    except Exception as e:
-        logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
 
 def serverstate_to_json():
     data = {
