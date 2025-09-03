@@ -420,7 +420,6 @@ class State:
             if self.current_player_id not in player_ids:
                 self.current_player_id = self.bot_id
                 logging.info(f"Reset current_player_id to bot_id due to invalid player")
-            logging.info(f"Updated bot_id from stale value to {self.bot_id}")
         
         self.current_player = self.get_player_by_id(self.current_player_id)
         if self.bot_id in self.spec_ids:

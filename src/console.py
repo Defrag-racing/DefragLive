@@ -89,9 +89,13 @@ SYSTEM_MESSAGE_PATTERNS = [
     "VBO surfaces",
     "vertexes,",
     "indexes",
+    "recording to demos/",  
+    "report written to system/reports/",
+    "VM_LoadDLL",
     "CL_InitCGame:",
     "Com_TouchMemory:",
     "msec",
+    "^2Cvar:",
     "test: okay"
 ]
 
@@ -175,50 +179,50 @@ def handle_map_error_with_countdown():
     countdown_thread.daemon = True
     countdown_thread.start()
 
-def check_pause_timeout():
-    """
-    Check if state has been paused for too long and trigger reconnect if needed
-    """
-    global PAUSE_STATE_START_TIME
-    
-    if serverstate.PAUSE_STATE:
-        if PAUSE_STATE_START_TIME is None:
-            PAUSE_STATE_START_TIME = time.time()
-            logging.info("State pause started - timer initiated")
-        elif time.time() - PAUSE_STATE_START_TIME > 60:  # 60 seconds timeout
-            logging.info("State has been paused for over 60 seconds - forcing reconnect")
-            PAUSE_STATE_START_TIME = None
-            
-            # Force reconnect in a separate thread to avoid blocking
-            def force_reconnect():
-                try:
-                    if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
-                        current_ip = serverstate.STATE.ip
-                        if current_ip:
-                            logging.info(f"Force reconnecting to current server: {current_ip}")
-                            serverstate.connect(current_ip)
-                        else:
-                            logging.info("No current IP found, trying to get new server")
-                            new_ip = servers.get_most_popular_server()
-                            if new_ip:
-                                serverstate.connect(new_ip)
-                            else:
-                                api.exec_command("reconnect")
-                    else:
-                        logging.info("No state available, using basic reconnect command")
-                        api.exec_command("reconnect")
-                except Exception as e:
-                    logging.error(f"Force reconnect failed: {e}")
-                    api.exec_command("reconnect")
-            
-            reconnect_thread = threading.Thread(target=force_reconnect)
-            reconnect_thread.daemon = True
-            reconnect_thread.start()
-    else:
-        # Reset timer when state is no longer paused
-        if PAUSE_STATE_START_TIME is not None:
-            PAUSE_STATE_START_TIME = None
-            logging.info("State unpaused - timer reset")
+#def check_pause_timeout():
+#    """
+#    Check if state has been paused for too long and trigger reconnect if needed
+#    """
+#    global PAUSE_STATE_START_TIME
+#    
+#    if serverstate.PAUSE_STATE:
+#        if PAUSE_STATE_START_TIME is None:
+#            PAUSE_STATE_START_TIME = time.time()
+#            logging.info("State pause started - timer initiated")
+#        elif time.time() - PAUSE_STATE_START_TIME > 60:  # 60 seconds timeout
+#            logging.info("State has been paused for over 60 seconds - forcing reconnect")
+#            PAUSE_STATE_START_TIME = None
+#            
+#            # Force reconnect in a separate thread to avoid blocking
+#            def force_reconnect():
+#                try:
+#                    if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
+#                        current_ip = serverstate.STATE.ip
+#                        if current_ip:
+#                            logging.info(f"Force reconnecting to current server: {current_ip}")
+#                            serverstate.connect(current_ip)
+#                        else:
+#                            logging.info("No current IP found, trying to get new server")
+#                            new_ip = servers.get_most_popular_server()
+#                            if new_ip:
+#                                serverstate.connect(new_ip)
+#                            else:
+#                                api.exec_command("reconnect")
+#                    else:
+#                        logging.info("No state available, using basic reconnect command")
+#                        api.exec_command("reconnect")
+#                except Exception as e:
+#                    logging.error(f"Force reconnect failed: {e}")
+#                    api.exec_command("reconnect")
+#            
+#            reconnect_thread = threading.Thread(target=force_reconnect)
+#            reconnect_thread.daemon = True
+#            reconnect_thread.start()
+#    else:
+#        # Reset timer when state is no longer paused
+#        if PAUSE_STATE_START_TIME is not None:
+#            PAUSE_STATE_START_TIME = None
+#            logging.info("State unpaused - timer reset")
 
 
 def handle_error_with_delay(error_line, error_action):
@@ -302,7 +306,7 @@ def read_tail(thefile):
         if not line:
             time.sleep(0.25)
             # Check pause timeout during idle periods
-            check_pause_timeout()
+            #check_pause_timeout()
             continue
 
         yield line
@@ -373,7 +377,7 @@ def read(file_path: str):
                 })
 
             # Check pause timeout after processing each line
-            check_pause_timeout()
+            #check_pause_timeout()
 
 
 def message_to_id(msg):
@@ -392,6 +396,10 @@ def is_system_message(line):
     """Check if a line contains system initialization or shutdown messages"""
     global SYSTEM_MESSAGE_PATTERNS
     
+    # Don't filter proxy command separator lines (they start with color codes)
+    if line.startswith("^") and "-----" in line:
+        return False  # This is a proxy separator, not a system message
+    
     for pattern in SYSTEM_MESSAGE_PATTERNS:
         if pattern in line:
             return True
@@ -405,14 +413,13 @@ def process_line(line):
     :param line: Console line to be processed
     :return: Data dictionary containing useful data about the line
     """
-
     global ERROR_FILTERS
     global LAST_ERROR_TIME
     global PREVIOUS_LINE
-    global PAUSE_STATE_START_TIME  # Add this to global access
-
+    global PAUSE_STATE_START_TIME
+    
     line = line.strip()
-
+    
     line_data = {
         "id": message_to_id(f"{time.time()}_MISC"),
         "type": "MISC",
@@ -430,7 +437,7 @@ def process_line(line):
     if any(pattern in line for pattern in [
         "R_Init", 
         "finished R_Init"
-    ]) or line.strip() == "----------------------":
+    ]) or (line.strip() == "----------------------" and "^5" not in line):
         return line_data  # Return as MISC type (won't be queued)
 
     # you can add more errors like this: ['error1', 'error2', 'error3']
@@ -544,8 +551,8 @@ def process_line(line):
                 api.exec_command("say ^7Vote to kick me detected. Voted ^1f2^7.")
             elif serverstate.STATE.num_players == 2:  # only bot and 1 other player in game, always f1
                 logging.info("1 other player in server, voting yes.")
-                api.exec_command("vote yes")
                 api.exec_command("say ^7Vote detected. Voted ^3f1^7.")
+                api.exec_command("vote yes")
             else:
                 logging.info("Multiple people in server, initiating vote tally.")
                 serverstate.STATE.init_vote()
@@ -613,13 +620,16 @@ def process_line(line):
                     logging.error(f"Emergency unpause failed: {e}")
 
         def parse_chat_message(command):
-            # CHAT MESSAGE (BY PLAYER)
-            chat_message_r = r"(.*)\^7: \^\d(.*)"
+            # CHAT MESSAGE (BY PLAYER) - Simplified pattern
+            chat_message_r = r"(.*):\s*\^(\d)(.*)"  # Any text, colon, optional space, color code, message
             match = re.match(chat_message_r, command)
-
-            chat_name = match.group(1)
-            chat_message = match.group(2)
-
+            
+            if not match:
+                raise Exception()
+            
+            chat_name = match.group(1).strip()  # Remove any trailing spaces
+            chat_message = match.group(3)       # The actual message content
+            
             line_data["id"] = message_to_id(f"SAY_{chat_name}_{chat_message}")
             line_data["type"] = "SAY"
             line_data["author"] = chat_name
@@ -647,9 +657,7 @@ def process_line(line):
             print_message = match.group(1)
 
             # ENHANCED FILTERING: Filter out empty PRINT messages AND system messages
-            if (not print_message or 
-                print_message.strip() == "" or
-                is_system_message(print_message)):
+            if (not print_message or print_message.strip() == ""):
                 line_data["type"] = "MISC"  # Change to MISC so it won't be queued
                 return
 
@@ -658,25 +666,26 @@ def process_line(line):
             line_data["author"] = None
             line_data["content"] = print_message
 
-        def parse_top_results(command):
-            # Check for !top result patterns
-            if "Rankings on" in command:
-                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
-                line_data["type"] = "PRINT"
-                line_data["author"] = None
-                line_data["content"] = command
-            elif "-----" in command:
-                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
-                line_data["type"] = "PRINT"
-                line_data["author"] = None
-                line_data["content"] = command
-            elif (command.startswith("^3  ") and ". ^7" in command and "reached the finish line" not in command):
-                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
-                line_data["type"] = "PRINT"
-                line_data["author"] = None
-                line_data["content"] = command
-            elif command.strip() == "":
-                line_data["id"] = message_to_id(f"PRINT_TOP_{command}")
+        def parse_proxy_results(command):
+            # Handle all proxy command responses
+            if (command.startswith("^3  Rankings on") or           
+                "'s Time History on" in command or                 
+                (command.startswith("^3  ") and "cet" in command) or  # Timehistory data
+                (command.startswith("^3   ") and ". ^7" in command and "reached the finish line" not in command) or  # !top entries
+                "'s Personal Best:" in command or                  
+                (command.startswith("^5") and "-----" in command) or # Separators
+                "Players Identified Online" in command or           # !who header
+                (command.startswith("^5") and "<-" in command) or   # !who entries
+                (command.startswith("^1-> ^2")) or                  # !version responses
+                ("is rank" in command and "of" in command and "with" in command) or   # !time responses
+                "Recent Maps" in command or                         # !recent header
+                (command.startswith("^3") and len(command.split()) >= 3 and not "cet" in command) or  # !recent entries
+                "Map Information for" in command or                 # !mapinfo header
+                (command.startswith("^3 ") and ("Weapons:" in command or "Items:" in command or "Functions:" in command or "Created:" in command)) or  # !mapinfo entries
+                (command.startswith("^3") and ("/" in command or ":" in command)) or  # Generic fallback
+                command.strip() == ""):                            # Empty lines
+                
+                line_data["id"] = message_to_id(f"PRINT_PROXY_{command}")
                 line_data["type"] = "PRINT"
                 line_data["author"] = None
                 line_data["content"] = command
@@ -804,9 +813,9 @@ def process_line(line):
             else:
                 raise Exception()
 
-        for fun in [parse_chat_message,
+        for fun in [parse_proxy_results,
+                    parse_chat_message,
                     parse_chat_announce,
-                    parse_top_results,
                     parse_print,
                     parse_scores,
                     parse_rename,
