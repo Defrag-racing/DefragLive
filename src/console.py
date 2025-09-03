@@ -64,6 +64,7 @@ SYSTEM_MESSAGE_PATTERNS = [
     "arenas ignored",
     "bots parsed",
     "VM_LoadDll",
+    "leaked filehandle",
     "succeeded!",
     "Loading dll file",
     "^7[^1m^3D^1d^7] cgame-proxy",  # cgame proxy messages
