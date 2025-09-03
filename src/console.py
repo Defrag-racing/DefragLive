@@ -77,6 +77,7 @@ SYSTEM_MESSAGE_PATTERNS = [
     "picmip:",
     "Initializing Shaders",
     "WARNING: Ignoring shader file",
+    "WARNING: server is not allowed to set",
     "Ignoring entire file",
     "stitched",
     "LoD cracks",
