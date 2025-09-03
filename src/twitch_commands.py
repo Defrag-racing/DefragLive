@@ -40,8 +40,8 @@ async def reconnect(ctx, author, args):
     api.exec_command("reconnect")  # This line is already correct in your code
 
 
-async def reshade(ctx, author, args):
-    api.press_key("{F9}")
+#async def reshade(ctx, author, args):
+#    api.press_key("{F9}")
 
 
 async def next(ctx, author, args):
@@ -61,10 +61,10 @@ async def prev(ctx, author, args):
 ##    api.hold_key(config.get_bind("+scores"), 0.0001)
 
 
-async def reload(ctx, author, args):
-    key = config.get_bind("+scores")
-    print(f"Key for +scores: {key}")
-    api.hold_key(key, 0.0001)
+#async def reload(ctx, author, args):
+#    key = config.get_bind("+scores")
+#    print(f"Key for +scores: {key}")
+#    api.hold_key(key, 0.0001)
 
 
 async def triggers(ctx, author, args):

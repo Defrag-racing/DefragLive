@@ -183,6 +183,7 @@ def get_dominant_nationality(server_data):
     return None
 
 def send_nationality_greeting(server_ip):
+    logging.info(f"[GREETING DEBUG] send_nationality_greeting called with IP: {server_ip}")
     """
     Send a nationality-specific greeting based on server composition
     """
@@ -338,6 +339,7 @@ def get_twitch_viewer_count():
 
 
 def send_auto_greeting():
+    logging.info(f"[GREETING DEBUG] send_auto_greeting called")
     """
     Send an automatic greeting message with current viewer count
     """
@@ -676,38 +678,12 @@ def initialize_state(force=False):
                 continue
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
             time.sleep(1)
-            api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')
-
-        # ONLY send greeting if this is a NEW server (not reconnection to same server)
-        if STATE_INITIALIZED and LAST_GREETING_SERVER is not None and CURRENT_IP != LAST_GREETING_SERVER:
-            LAST_GREETING_SERVER = CURRENT_IP  # Mark this server as having received greeting
-            logging.info(f"Server change detected - scheduling greeting for {CURRENT_IP}")
-            
-            import threading
-            def delayed_nationality_greeting():
-                import time
-                time.sleep(5)  # Wait 5 seconds after connection
-                send_nationality_greeting(STATE.ip)
-            
-            greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
-            greeting_thread.start()
-        elif LAST_GREETING_SERVER is None:
-            # First startup - just mark the server without sending greeting
-            LAST_GREETING_SERVER = CURRENT_IP
-            logging.info(f"Bot startup - marked initial server {CURRENT_IP} (no greeting)")
-        elif CURRENT_IP == LAST_GREETING_SERVER:
-            logging.info(f"Reconnection to same server {CURRENT_IP} - skipping greeting")
-        
+            api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')        
     except Exception as e:
         logging.error(f"State initialization failed: {e}")
         return False
-    return True
-
-    # if not mapdata_thread.is_alive():
-    #     mapdata_thread.start()
 
     return True
-
 
 def standby_mode_started():
     global RECONNECTED_CHECK

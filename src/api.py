@@ -82,54 +82,54 @@ def play_sound(sound):
     logging.info(f"Sound is already playing, cancelling current request !")
 
 
-def press_key(key, verbose=True):
-    try:
-        if verbose:
-            logging.info(f"Pressing key {key}")
-        
-        # Add window validation before sending
-        if not WINDOW or not WINDOW.exists:
-            logging.info(f"Window not found or inactive. {key} was not sent.")
-            return
-            
-        # Verify window is still the game window
-        if "TwitchBot Engine" not in WINDOW.title:
-            logging.info(f"Window title changed. {key} was not sent to prevent leaking.")
-            return
-            
-        WINDOW.send(key, blocking=True, press_duration=30)
-        
-    except (AttributeError, Exception) as e:
-        logging.info(f"Failed to send key {key}: {e}. Window may not be active.")
+#def press_key(key, verbose=True):
+#    try:
+#        if verbose:
+#            logging.info(f"Pressing key {key}")
+#        
+#        # Add window validation before sending
+#        if not WINDOW or not WINDOW.exists:
+#            logging.info(f"Window not found or inactive. {key} was not sent.")
+#            return
+#            
+#        # Verify window is still the game window
+#        if "TwitchBot Engine" not in WINDOW.title:
+#            logging.info(f"Window title changed. {key} was not sent to prevent leaking.")
+#            return
+#            
+#        WINDOW.send(key, blocking=True, press_duration=30)
+#        
+#    except (AttributeError, Exception) as e:
+#        logging.info(f"Failed to send key {key}: {e}. Window may not be active.")
 
 
-def hold_key(x, duration):
-    try:
-        logging.info(f"Holding {x} for {duration} seconds")
-        
-        # Add window validation
-        if not WINDOW or not WINDOW.exists:
-            logging.info(f"Window not found. {x} hold cancelled.")
-            return
-            
-        if "TwitchBot Engine" not in WINDOW.title:
-            logging.info(f"Wrong window active. {x} hold cancelled.")
-            return
-        
-        # Send key down to specific window
-        WINDOW.send(x, blocking=True)
-        time.sleep(duration)
-        
-        # Use window-specific key release instead of global AHK script
-        WINDOW.send(f"{x} up", blocking=True)
-        
-    except (AttributeError, Exception) as e:
-        logging.info(f"Failed to hold key {x}: {e}. Window interaction failed.")
-        # Ensure key is released even if there's an error
-        try:
-            AHK.run_script(f"Send {{{x} up}}", blocking=True)
-        except:
-            pass  # If this fails too, at least we tried
+#def hold_key(x, duration):
+#    try:
+#        logging.info(f"Holding {x} for {duration} seconds")
+#        
+#        # Add window validation
+#        if not WINDOW or not WINDOW.exists:
+#            logging.info(f"Window not found. {x} hold cancelled.")
+#            return
+#            
+#        if "TwitchBot Engine" not in WINDOW.title:
+#            logging.info(f"Wrong window active. {x} hold cancelled.")
+#            return
+#        
+#        # Send key down to specific window
+#        WINDOW.send(x, blocking=True)
+#        time.sleep(duration)
+#        
+#        # Use window-specific key release instead of global AHK script
+#        WINDOW.send(f"{x} up", blocking=True)
+#        
+#    except (AttributeError, Exception) as e:
+#        logging.info(f"Failed to hold key {x}: {e}. Window interaction failed.")
+#        # Ensure key is released even if there's an error
+#        try:
+#            AHK.run_script(f"Send {{{x} up}}", blocking=True)
+#        except:
+#            pass  # If this fails too, at least we tried
 
 def display_message(message, time=3, y_pos=140, size=10):
     """Display a message using the game's displaymessage command"""

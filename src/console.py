@@ -583,6 +583,25 @@ def process_line(line):
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
                 logging.info("Connection complete. Continuing state.")
+                
+                # GREETING LOGIC - triggered when connection actually completes
+                logging.info(f"[GREETING DEBUG] Connection complete - LAST_GREETING_SERVER: {serverstate.LAST_GREETING_SERVER}")
+                logging.info(f"[GREETING DEBUG] Connection complete - CURRENT_IP: {serverstate.CURRENT_IP}")
+                
+                if serverstate.CURRENT_IP and serverstate.CURRENT_IP != serverstate.LAST_GREETING_SERVER:
+                    serverstate.LAST_GREETING_SERVER = serverstate.CURRENT_IP
+                    logging.info(f"[GREETING DEBUG] Scheduling greeting for {serverstate.CURRENT_IP}")
+                    
+                    def delayed_nationality_greeting():
+                        import time
+                        time.sleep(5)
+                        logging.info(f"[GREETING DEBUG] Executing greeting for {serverstate.CURRENT_IP}")
+                        serverstate.send_nationality_greeting(serverstate.CURRENT_IP)
+                    
+                    import threading
+                    greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
+                    greeting_thread.start()
+                
                 PAUSE_STATE_START_TIME = None
             elif serverstate.VID_RESTARTING:
                 time.sleep(1)
@@ -817,9 +836,10 @@ def process_line(line):
                     try:
                         import config
                         import api
-                        key = config.get_bind("+scores")
-                        logging.info(f"Auto-refreshing scores for new player: {command}")
-                        api.hold_key(key, 0.0001)
+                        #key = config.get_bind("+scores")
+                        #logging.info(f"Auto-refreshing scores for new player: {command}")
+                        #api.hold_key(key, 0.0001)
+                        pass
                     except Exception as e:
                         logging.error(f"Failed to auto-refresh scores: {e}")
                 
