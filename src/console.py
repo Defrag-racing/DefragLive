@@ -566,9 +566,6 @@ def process_line(line):
             # Reset timer when pause state is cleared
             PAUSE_STATE_START_TIME = None
 
-        if line.startswith('Not recording a demo.'):
-            logging.info(f"DEBUG: Not recording detected. CONNECTING={serverstate.CONNECTING}, VID_RESTARTING={serverstate.VID_RESTARTING}, PAUSE_STATE={serverstate.PAUSE_STATE}")
-            
         if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
             if serverstate.CONNECTING:
                 time.sleep(1)
