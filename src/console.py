@@ -370,14 +370,24 @@ def read(file_path: str):
                                       "REACHEDFINISH", "YOURRANK", "MAP_ERROR", "MAP_COUNTDOWN",
                                       "SERVERRECORD", "FIRSTTIME", "LOGGEDIN"]:
                 
-                # Delay ALL messages by 2 seconds
-                DELAYED_MESSAGE_QUEUE.append({
-                    'message': line_data,
-                    'send_time': time.time() + 2  # 2 second delay for everything
-                })
-
-            # Check pause timeout after processing each line
-            #check_pause_timeout()
+                # Filter out bot tell responses before queueing
+                if (line_data["type"] == "SAY" and 
+                    line_data.get("author") and "DefragLive" in str(line_data["author"]) and
+                    line_data.get("content") and 
+                    any(phrase in line_data["content"] for phrase in [
+                        "Detected nospec,",
+                        "To disable private notifications",
+                        "nospec active,",
+                        "cant spectate"
+                    ])):
+                    # Skip queueing tell responses
+                    pass
+                else:
+                    # Delay ALL other messages by 2 seconds
+                    DELAYED_MESSAGE_QUEUE.append({
+                        'message': line_data,
+                        'send_time': time.time() + 2  # 2 second delay for everything
+                    })
 
 
 def message_to_id(msg):
@@ -558,36 +568,87 @@ def process_line(line):
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
-        if line.startswith('Com_TouchMemory:'):
-            time.sleep(3)
-            api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
-            serverstate.initialize_state(True)
-            serverstate.PAUSE_STATE = False
-            # Reset timer when pause state is cleared
-            PAUSE_STATE_START_TIME = None
-
-        if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
-            if serverstate.CONNECTING:
-                time.sleep(1)
-                serverstate.CONNECTING = False
-                serverstate.PAUSE_STATE = False  # ADD THIS LINE
-                logging.info("Connection complete. Continuing state.")
-                PAUSE_STATE_START_TIME = None    # ADD THIS LINE
-            elif serverstate.VID_RESTARTING:
-                time.sleep(1)
-                logging.info("vid_restart done.")
+            if line.startswith('Com_TouchMemory:'):
+                time.sleep(3)
+                api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+                serverstate.initialize_state(True)
                 serverstate.PAUSE_STATE = False
-                serverstate.VID_RESTARTING = False
-                # Reset timer when pause state is cleared
-                PAUSE_STATE_START_TIME = None
-            elif serverstate.PAUSE_STATE:
-                time.sleep(1)
-                serverstate.PAUSE_STATE = False
-                logging.info("Game loaded. Continuing state.")
-                serverstate.STATE.say_connect_msg()
                 # Reset timer when pause state is cleared
                 PAUSE_STATE_START_TIME = None
 
+            if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
+                if serverstate.CONNECTING:
+                    time.sleep(1)
+                    serverstate.CONNECTING = False
+                    serverstate.PAUSE_STATE = False
+                    logging.info("Connection complete. Continuing state.")
+                    PAUSE_STATE_START_TIME = None
+                elif serverstate.VID_RESTARTING:
+                    time.sleep(1)
+                    logging.info("vid_restart done.")
+                    serverstate.PAUSE_STATE = False
+                    serverstate.VID_RESTARTING = False
+                    # Reset timer when pause state is cleared
+                    PAUSE_STATE_START_TIME = None
+                    
+                    # SYNC SETTINGS AFTER VID_RESTART
+                    def delayed_settings_sync():
+                        import time
+                        import websocket_console
+                        time.sleep(2)
+                        try:
+                            websocket_console.sync_current_settings_to_vps()
+                            logging.info("Synced settings to VPS after vid_restart")
+                        except Exception as e:
+                            logging.error(f"Failed to sync settings after vid_restart: {e}")
+                    
+                    import threading
+                    sync_thread = threading.Thread(target=delayed_settings_sync)
+                    sync_thread.daemon = True
+                    sync_thread.start()
+                    
+                elif serverstate.PAUSE_STATE:
+                    time.sleep(1)
+                    serverstate.PAUSE_STATE = False
+                    logging.info("Game loaded. Continuing state.")
+                    serverstate.STATE.say_connect_msg()
+                    PAUSE_STATE_START_TIME = None
+                    
+                    # SYNC SETTINGS AFTER GAME RESTART
+                    def delayed_settings_sync():
+                        import time
+                        import websocket_console
+                        time.sleep(2)
+                        try:
+                            websocket_console.sync_current_settings_to_vps()
+                            logging.info("Synced settings to VPS after game restart")
+                        except Exception as e:
+                            logging.error(f"Failed to sync settings after restart: {e}")
+                    
+                    import threading
+                    sync_thread = threading.Thread(target=delayed_settings_sync)
+                    sync_thread.daemon = True
+                    sync_thread.start()
+                else:
+                    # DETECT MANUAL GAME RESTART (when game restarts but no pause state)
+                    # This happens when you quit the game manually and it restarts
+                    logging.info("Manual game restart detected - syncing settings")
+                    
+                    def delayed_settings_sync():
+                        import time
+                        import websocket_console
+                        time.sleep(3)  # Wait longer for manual restart
+                        try:
+                            websocket_console.sync_current_settings_to_vps()
+                            logging.info("Synced settings to VPS after manual game restart")
+                        except Exception as e:
+                            logging.error(f"Failed to sync settings after manual restart: {e}")
+                    
+                    import threading
+                    sync_thread = threading.Thread(target=delayed_settings_sync)
+                    sync_thread.daemon = True
+                    sync_thread.start()
+ 
         if (line.startswith('Com_TouchMemory:') or 
             ('entered the game.' in line and serverstate.PAUSE_STATE and 
              not serverstate.CONNECTING and not serverstate.VID_RESTARTING)):
@@ -627,23 +688,22 @@ def process_line(line):
             chat_name = match.group(1).strip()  # Remove any trailing spaces
             chat_message = match.group(3)       # The actual message content
             
+            # FILTER OUT BOT'S OWN TELL RESPONSES
+            if "DefragLive" in chat_name or "LIVE" in chat_name:
+                if any(phrase in chat_message for phrase in [
+                    "Detected nospec,",
+                    "To disable private notifications",
+                    "nospec active,",
+                    "cant spectate"
+                ]):
+                    # Don't process as a regular chat message
+                    raise Exception()  # This will skip this parsing function
+            
             line_data["id"] = message_to_id(f"SAY_{chat_name}_{chat_message}")
             line_data["type"] = "SAY"
             line_data["author"] = chat_name
             line_data["content"] = chat_message
             line_data["command"] = cmd.scan_for_command(chat_message)
-
-        def parse_chat_announce(command):
-            # CHAT ANNOUNCEMENT
-            chat_announce_r = r"^chat\s*\"(.*?)\".*?$"
-            match = re.match(chat_announce_r, command)
-
-            chat_announcement = match.group(1)
-
-            line_data["id"] = message_to_id(f"ANN_{chat_announcement}")
-            line_data["type"] = "ANNOUNCE"
-            line_data["author"] = None
-            line_data["content"] = chat_announcement
 
         def parse_print(command):
             # PRINT
@@ -652,6 +712,16 @@ def process_line(line):
             match = re.match(print_r, command)
 
             print_message = match.group(1)
+
+            # FILTER OUT TELL RESPONSES - they shouldn't appear in extension
+            if any(phrase in print_message for phrase in [
+                "Detected nospec,",
+                "To disable private notifications", 
+                "nospec active,",
+                "cant spectate"
+            ]):
+                line_data["type"] = "MISC"  # Change to MISC so it won't be queued for extension
+                return
 
             # ENHANCED FILTERING: Filter out empty PRINT messages AND system messages
             if (not print_message or print_message.strip() == ""):
@@ -812,7 +882,6 @@ def process_line(line):
 
         for fun in [parse_proxy_results,
                     parse_chat_message,
-                    parse_chat_announce,
                     parse_print,
                     parse_scores,
                     parse_rename,

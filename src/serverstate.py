@@ -565,7 +565,7 @@ def start():
                     # Given that a new report exists, read this new data.
                     server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
 
-                    if bool(server_info):  # New data is not empty and valid. Update the state object.
+                    if bool(server_info) and STATE is not None:   # New data is not empty and valid. Update the state object.
                         STATE.players = players
                         STATE.update_info(server_info)
                         STATE.num_players = num_players
@@ -580,7 +580,11 @@ def start():
                         prev_state = curr_state
                         prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
-                if getattr(STATE, 'vote_active', False):
+                    elif STATE is None:
+                        # STATE is None, reinitialize
+                        logging.warning("STATE is None during update, reinitializing...")
+                        initialize_state()
+                if getattr(STATE, 'vote_active', False) and STATE is not None:
                     STATE.handle_vote()
         except Exception as e:
             if e.args[0] == 'Paused':
@@ -778,7 +782,11 @@ def validate_state():
     global RECONNECTED_CHECK
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
-    
+
+    if STATE is None:
+        logging.warning("validate_state called but STATE is None, skipping validation")
+        returns
+
     old_player_id = STATE.current_player_id  # Store for timeout cleanup
     
     # EXISTING DEBUG LOGGING
