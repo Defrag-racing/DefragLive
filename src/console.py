@@ -576,78 +576,78 @@ def process_line(line):
                 # Reset timer when pause state is cleared
                 PAUSE_STATE_START_TIME = None
 
-            if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
-                if serverstate.CONNECTING:
-                    time.sleep(1)
-                    serverstate.CONNECTING = False
-                    serverstate.PAUSE_STATE = False
-                    logging.info("Connection complete. Continuing state.")
-                    PAUSE_STATE_START_TIME = None
-                elif serverstate.VID_RESTARTING:
-                    time.sleep(1)
-                    logging.info("vid_restart done.")
-                    serverstate.PAUSE_STATE = False
-                    serverstate.VID_RESTARTING = False
-                    # Reset timer when pause state is cleared
-                    PAUSE_STATE_START_TIME = None
-                    
-                    # SYNC SETTINGS AFTER VID_RESTART
-                    def delayed_settings_sync():
-                        import time
-                        import websocket_console
-                        time.sleep(2)
-                        try:
-                            websocket_console.sync_current_settings_to_vps()
-                            logging.info("Synced settings to VPS after vid_restart")
-                        except Exception as e:
-                            logging.error(f"Failed to sync settings after vid_restart: {e}")
-                    
-                    import threading
-                    sync_thread = threading.Thread(target=delayed_settings_sync)
-                    sync_thread.daemon = True
-                    sync_thread.start()
-                    
-                elif serverstate.PAUSE_STATE:
-                    time.sleep(1)
-                    serverstate.PAUSE_STATE = False
-                    logging.info("Game loaded. Continuing state.")
-                    serverstate.STATE.say_connect_msg()
-                    PAUSE_STATE_START_TIME = None
-                    
-                    # SYNC SETTINGS AFTER GAME RESTART
-                    def delayed_settings_sync():
-                        import time
-                        import websocket_console
-                        time.sleep(2)
-                        try:
-                            websocket_console.sync_current_settings_to_vps()
-                            logging.info("Synced settings to VPS after game restart")
-                        except Exception as e:
-                            logging.error(f"Failed to sync settings after restart: {e}")
-                    
-                    import threading
-                    sync_thread = threading.Thread(target=delayed_settings_sync)
-                    sync_thread.daemon = True
-                    sync_thread.start()
-                else:
-                    # DETECT MANUAL GAME RESTART (when game restarts but no pause state)
-                    # This happens when you quit the game manually and it restarts
-                    logging.info("Manual game restart detected - syncing settings")
-                    
-                    def delayed_settings_sync():
-                        import time
-                        import websocket_console
-                        time.sleep(3)  # Wait longer for manual restart
-                        try:
-                            websocket_console.sync_current_settings_to_vps()
-                            logging.info("Synced settings to VPS after manual game restart")
-                        except Exception as e:
-                            logging.error(f"Failed to sync settings after manual restart: {e}")
-                    
-                    import threading
-                    sync_thread = threading.Thread(target=delayed_settings_sync)
-                    sync_thread.daemon = True
-                    sync_thread.start()
+        if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
+            if serverstate.CONNECTING:
+                time.sleep(1)
+                serverstate.CONNECTING = False
+                serverstate.PAUSE_STATE = False
+                logging.info("Connection complete. Continuing state.")
+                PAUSE_STATE_START_TIME = None
+            elif serverstate.VID_RESTARTING:
+                time.sleep(1)
+                logging.info("vid_restart done.")
+                serverstate.PAUSE_STATE = False
+                serverstate.VID_RESTARTING = False
+                # Reset timer when pause state is cleared
+                PAUSE_STATE_START_TIME = None
+                
+                # SYNC SETTINGS AFTER VID_RESTART
+                def delayed_settings_sync():
+                    import time
+                    import websocket_console
+                    time.sleep(2)
+                    try:
+                        websocket_console.sync_current_settings_to_vps()
+                        logging.info("Synced settings to VPS after vid_restart")
+                    except Exception as e:
+                        logging.error(f"Failed to sync settings after vid_restart: {e}")
+                
+                import threading
+                sync_thread = threading.Thread(target=delayed_settings_sync)
+                sync_thread.daemon = True
+                sync_thread.start()
+                
+            elif serverstate.PAUSE_STATE:
+                time.sleep(1)
+                serverstate.PAUSE_STATE = False
+                logging.info("Game loaded. Continuing state.")
+                serverstate.STATE.say_connect_msg()
+                PAUSE_STATE_START_TIME = None
+                
+                # SYNC SETTINGS AFTER GAME RESTART
+                def delayed_settings_sync():
+                    import time
+                    import websocket_console
+                    time.sleep(2)
+                    try:
+                        websocket_console.sync_current_settings_to_vps()
+                        logging.info("Synced settings to VPS after game restart")
+                    except Exception as e:
+                        logging.error(f"Failed to sync settings after restart: {e}")
+                
+                import threading
+                sync_thread = threading.Thread(target=delayed_settings_sync)
+                sync_thread.daemon = True
+                sync_thread.start()
+            else:
+                # DETECT MANUAL GAME RESTART (when game restarts but no pause state)
+                # This happens when you quit the game manually and it restarts
+                logging.info("Manual game restart detected - syncing settings")
+                
+                def delayed_settings_sync():
+                    import time
+                    import websocket_console
+                    time.sleep(3)  # Wait longer for manual restart
+                    try:
+                        websocket_console.sync_current_settings_to_vps()
+                        logging.info("Synced settings to VPS after manual game restart")
+                    except Exception as e:
+                        logging.error(f"Failed to sync settings after manual restart: {e}")
+                
+                import threading
+                sync_thread = threading.Thread(target=delayed_settings_sync)
+                sync_thread.daemon = True
+                sync_thread.start()
  
         if (line.startswith('Com_TouchMemory:') or 
             ('entered the game.' in line and serverstate.PAUSE_STATE and 
