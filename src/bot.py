@@ -61,7 +61,6 @@ TWITCH_CMDS = [
     ["inputs"],
     ["slick"],
     ["n1"],
-    ["viewers", "chatters"],
     ["map"],
     ["check"],
 ##    ["speclist"],
