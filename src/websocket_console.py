@@ -71,7 +71,7 @@ def execute_settings_command(content):
         def delayed_writeconfig():
             import time
             global CANCEL_PENDING_WRITECONFIG
-            time.sleep(2)
+            time.sleep(1)
             # Check if writeconfig was cancelled
             if not CANCEL_PENDING_WRITECONFIG:
                 api.exec_command("writeconfig settings-current.cfg")
@@ -80,7 +80,7 @@ def execute_settings_command(content):
                 # Sync settings after writeconfig for regular commands
                 def delayed_settings_confirmation():
                     import time
-                    time.sleep(2)  # Wait for writeconfig to complete
+                    time.sleep(1)  # Wait for writeconfig to complete
                     try:
                         sync_current_settings_to_vps()
                         logging.info("[SETTINGS] Synced settings after regular command")
