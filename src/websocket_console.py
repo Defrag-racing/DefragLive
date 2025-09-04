@@ -24,6 +24,7 @@ import time
 import logging
 
 SETTINGS_QUEUE = []
+CANCEL_PENDING_WRITECONFIG = False
 
 def handle_settings_command(content):
     """Handle settings command from VPS"""
@@ -42,46 +43,62 @@ def handle_settings_command(content):
     execute_settings_command(content)
 
 def execute_settings_command(content):
-    """Execute a single settings command"""
+    global CANCEL_PENDING_WRITECONFIG
+    
     logging.info(f'[SETTINGS] Received command: {content["command"]}')
     
     try:
         command = content["command"]
         
-        # Check if this is a vid_restart command
         if command == "vid_restart":
-            logging.info("[SETTINGS] Executing vid_restart - setting VID_RESTARTING flag")
-            # Set the flag BEFORE executing the command
+            logging.info("[SETTINGS] Executing vid_restart - canceling any pending writeconfig")
+            CANCEL_PENDING_WRITECONFIG = True  # Cancel any pending writeconfig
             import serverstate
             serverstate.VID_RESTARTING = True
             serverstate.PAUSE_STATE = True
+            api.exec_command(command)
+            logging.info(f'[SETTINGS] Executed: {command}')
+            return
+        
+        # RESET flag for regular commands
+        CANCEL_PENDING_WRITECONFIG = False
         
         # Execute the setting command
         api.exec_command(command)
         logging.info(f'[SETTINGS] Executed: {command}')
         
-        # NEW: Write config immediately after setting command to ensure it's saved
-        if command != "vid_restart":
-            api.exec_command("writeconfig settings-current.cfg")
-            logging.info("[SETTINGS] Wrote config after command execution")
-        
-        # NEW: Auto-sync settings back to extension after command execution
-        # Wait a moment for the command to take effect, then sync
-        import threading
-        def delayed_settings_sync():
+        # Add 1-second delay before writeconfig for non-vid_restart commands
+        def delayed_writeconfig():
             import time
-            time.sleep(0.5)  # Wait for command to take effect
-            try:
-                sync_current_settings_to_vps()
-                logging.info("[SETTINGS] Auto-synced settings after command execution")
-            except Exception as e:
-                logging.error(f"[SETTINGS] Failed to auto-sync settings: {e}")
+            global CANCEL_PENDING_WRITECONFIG
+            time.sleep(1)
+            # Check if writeconfig was cancelled
+            if not CANCEL_PENDING_WRITECONFIG:
+                api.exec_command("writeconfig settings-current.cfg")
+                logging.info("[SETTINGS] Wrote config after 1-second delay")
+                
+                # Sync settings after writeconfig for regular commands
+                def delayed_settings_confirmation():
+                    import time
+                    time.sleep(2)  # Wait for writeconfig to complete
+                    try:
+                        sync_current_settings_to_vps()
+                        logging.info("[SETTINGS] Synced settings after regular command")
+                    except Exception as e:
+                        logging.error(f"[SETTINGS] Failed to sync after regular command: {e}")
+                
+                import threading
+                sync_thread = threading.Thread(target=delayed_settings_confirmation)
+                sync_thread.daemon = True
+                sync_thread.start()
+            else:
+                logging.info("[SETTINGS] Writeconfig cancelled due to vid_restart")
         
-        # Don't sync for vid_restart commands (they'll sync automatically when restart completes)
-        if command != "vid_restart":
-            sync_thread = threading.Thread(target=delayed_settings_sync)
-            sync_thread.daemon = True
-            sync_thread.start()
+        # Start the writeconfig thread
+        import threading
+        writeconfig_thread = threading.Thread(target=delayed_writeconfig)
+        writeconfig_thread.daemon = True
+        writeconfig_thread.start()
         
     except Exception as e:
         logging.error(f'[SETTINGS] Failed to execute command {content["command"]}: {e}')
@@ -120,22 +137,22 @@ def get_current_game_settings():
     
     # Default values for all cvars
     default_values = {
-        'r_rendertriggerBrushes': '0',
+        'r_renderTriggerBrushes': '0',
         'r_fastsky': '0', 
         'r_renderClipBrushes': '0',
         'r_renderSlickSurfaces': '0',
-        'r_mapoverbrightbits': '2',
+        'r_mapOverbrightBits': '2',
         'r_picmip': '0',
         'r_fullbright': '0',
         'r_gamma': '1.2',
-        'cg_drawgun': '1',
+        'cg_drawGun': '1',
         'df_chs1_Info6': '0',
         'cg_lagometer': '0',
         'mdd_snap': '3',
         'mdd_cgaz': '1',
         'df_chs1_Info5': '23',
         'df_drawSpeed': '0',
-        'df_chs0_draw': '1',
+        'df_chs0_Draw': '1',
         'df_chs1_Info7': '0',
         'df_mp_NoDrawRadius': '100',
         'cg_thirdperson': '0',
@@ -146,22 +163,22 @@ def get_current_game_settings():
     
     # Mapping from game cvars to UI setting names
     cvar_to_setting = {
-        'r_rendertriggerBrushes': 'triggers',
+        'r_renderTriggerBrushes': 'triggers',
         'r_fastsky': 'sky',
         'r_renderClipBrushes': 'clips', 
         'r_renderSlickSurfaces': 'slick',
-        'r_mapoverbrightbits': 'brightness',
+        'r_mapOverbrightBits': 'brightness',
         'r_picmip': 'picmip',
         'r_fullbright': 'fullbright',
         'r_gamma': 'gamma',
-        'cg_drawgun': 'drawgun',
+        'cg_drawGun': 'drawgun',
         'df_chs1_Info6': 'angles',
         'cg_lagometer': 'lagometer',
         'mdd_snap': 'snaps',
         'mdd_cgaz': 'cgaz',
         'df_chs1_Info5': 'speedinfo',
         'df_drawSpeed': 'speedorig',
-        'df_chs0_draw': 'inputs',
+        'df_chs0_Draw': 'inputs',
         'df_chs1_Info7': 'obs',
         'df_mp_NoDrawRadius': 'nodraw',
         'cg_thirdperson': 'thirdperson',
@@ -204,8 +221,11 @@ def get_current_game_settings():
                     cvar_name = parts[1]
                     cvar_value = parts[2].strip('"')  # Remove quotes if present
                     
-                    if cvar_name in default_values:
-                        current_values[cvar_name] = cvar_value
+                    # Case-insensitive lookup
+                    for default_cvar in default_values.keys():
+                        if cvar_name.lower() == default_cvar.lower():
+                            current_values[default_cvar] = cvar_value
+                            break
         
         # Fill in missing cvars with defaults
         for cvar_name in default_values:
@@ -219,16 +239,43 @@ def get_current_game_settings():
             if cvar_name in cvar_to_setting:
                 setting_key = cvar_to_setting[cvar_name]
                 
-                # Convert values to appropriate types
-                if setting_key in ['brightness', 'picmip', 'snaps', 'speedinfo', 'nodraw']:
-                    # Integer values
-                    ui_settings[setting_key] = int(cvar_value)
-                elif setting_key == 'gamma':
-                    # Float value
-                    ui_settings[setting_key] = float(cvar_value)
-                else:
-                    # Boolean values (0 = False, anything else = True)
-                    ui_settings[setting_key] = bool(int(cvar_value))
+                # Convert to UI setting format
+                ui_settings = {}
+                for cvar_name, cvar_value in current_values.items():
+                    if cvar_name in cvar_to_setting:
+                        setting_key = cvar_to_setting[cvar_name]
+                        
+                        # Convert values to appropriate types
+                        if setting_key in ['brightness', 'picmip']:
+                            # Integer values that stay as integers
+                            ui_settings[setting_key] = int(cvar_value)
+                        elif setting_key == 'gamma':
+                            # Float value
+                            ui_settings[setting_key] = float(cvar_value)
+                        elif setting_key == 'drawgun':
+                            # 1 = True, 2 = False
+                            ui_settings[setting_key] = (int(cvar_value) == 1)
+                        elif setting_key == 'sky':
+                            # 0 = True, 1 = False (reversed!)
+                            ui_settings[setting_key] = (int(cvar_value) == 0)
+                        elif setting_key == 'angles':
+                            # 40 = True, 0 = False
+                            ui_settings[setting_key] = (int(cvar_value) == 40)
+                        elif setting_key == 'snaps':
+                            # 3 = True, 0 = False - send as boolean
+                            ui_settings[setting_key] = (int(cvar_value) == 3)
+                        elif setting_key == 'speedinfo':
+                            # 23 = True, 0 = False - send as boolean
+                            ui_settings[setting_key] = (int(cvar_value) == 23)
+                        elif setting_key == 'obs':
+                            # 50 = True, 0 = False - send as boolean
+                            ui_settings[setting_key] = (int(cvar_value) == 50)
+                        elif setting_key == 'nodraw':
+                            # 100000 = True, 100 = False - send as boolean
+                            ui_settings[setting_key] = (int(cvar_value) == 100000)
+                        else:
+                            # Standard boolean values (0 = False, anything else = True)
+                            ui_settings[setting_key] = bool(int(cvar_value))
         
         logging.info(f"[SETTINGS] Successfully read current game settings: {ui_settings}")
         return ui_settings

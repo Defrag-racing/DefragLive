@@ -571,16 +571,49 @@ def process_line(line):
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
-            if line.startswith('Com_TouchMemory:'):
-                time.sleep(3)
-                api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
-                serverstate.initialize_state(True)
-                serverstate.PAUSE_STATE = False
-                # Reset timer when pause state is cleared
-                PAUSE_STATE_START_TIME = None
+        if line.startswith('Com_TouchMemory:'):
+            time.sleep(3)
+            api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+            serverstate.initialize_state(True)
+            serverstate.PAUSE_STATE = False
+            # Reset timer when pause state is cleared
+            PAUSE_STATE_START_TIME = None
 
-        if line.startswith('Not recording a demo.') or line.startswith("report written to system/reports/initialstate.txt"):
-            if serverstate.CONNECTING:
+        if (line.startswith('Not recording a demo.') or 
+            line.startswith("report written to system/reports/initialstate.txt") or
+            line.startswith("Sound memory manager started") or
+            "GL_RENDERER:" in line or
+            "MODE: -1," in line):
+            
+            # PRIORITY ORDER: Check most specific conditions first
+            if serverstate.VID_RESTARTING:
+                # VID_RESTART completion - HIGHEST PRIORITY
+                time.sleep(1)
+                logging.info("vid_restart done.")
+                serverstate.PAUSE_STATE = False
+                serverstate.VID_RESTARTING = False
+                PAUSE_STATE_START_TIME = None
+                
+                # Process queued settings first, then sync
+                websocket_console.process_queued_settings()
+                
+                def delayed_vid_restart_sync():
+                    import time
+                    import websocket_console
+                    time.sleep(2)
+                    try:
+                        websocket_console.sync_current_settings_to_vps()
+                        logging.info("Synced settings to VPS after vid_restart")
+                    except Exception as e:
+                        logging.error(f"Failed to sync settings after vid_restart: {e}")
+                
+                import threading
+                vid_restart_thread = threading.Thread(target=delayed_vid_restart_sync)
+                vid_restart_thread.daemon = True
+                vid_restart_thread.start()
+                
+            elif serverstate.CONNECTING:
+                # Connection completion - SECOND PRIORITY
                 time.sleep(1)
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
@@ -605,32 +638,9 @@ def process_line(line):
                     greeting_thread.start()
                 
                 PAUSE_STATE_START_TIME = None
-            elif serverstate.VID_RESTARTING:
-                time.sleep(1)
-                logging.info("vid_restart done.")
-                serverstate.PAUSE_STATE = False
-                serverstate.VID_RESTARTING = False
-                # Reset timer when pause state is cleared
-                PAUSE_STATE_START_TIME = None
-                
-                # SYNC SETTINGS AFTER VID_RESTART
-                def delayed_settings_sync():
-                    import time
-                    import websocket_console
-                    time.sleep(2)
-                    try:
-                        websocket_console.sync_current_settings_to_vps()
-                        logging.info("Synced settings to VPS after vid_restart")
-                    except Exception as e:
-                        logging.error(f"Failed to sync settings after vid_restart: {e}")
-                websocket_console.process_queued_settings()
-
-                import threading
-                sync_thread = threading.Thread(target=delayed_settings_sync)
-                sync_thread.daemon = True
-                sync_thread.start()
                 
             elif serverstate.PAUSE_STATE:
+                # Game restart completion - THIRD PRIORITY
                 time.sleep(1)
                 serverstate.PAUSE_STATE = False
                 logging.info("Game loaded. Continuing state.")
@@ -638,7 +648,7 @@ def process_line(line):
                 PAUSE_STATE_START_TIME = None
                 
                 # SYNC SETTINGS AFTER GAME RESTART
-                def delayed_settings_sync():
+                def delayed_game_restart_sync():
                     import time
                     import websocket_console
                     time.sleep(2)
@@ -647,31 +657,15 @@ def process_line(line):
                         logging.info("Synced settings to VPS after game restart")
                     except Exception as e:
                         logging.error(f"Failed to sync settings after restart: {e}")
+                
                 websocket_console.process_queued_settings()
-
-                import threading
-                sync_thread = threading.Thread(target=delayed_settings_sync)
-                sync_thread.daemon = True
-                sync_thread.start()
-            else:
-                # DETECT MANUAL GAME RESTART (when game restarts but no pause state)
-                # This happens when you quit the game manually and it restarts
-                logging.info("Manual game restart detected - syncing settings")
-                
-                def delayed_settings_sync():
-                    import time
-                    import websocket_console
-                    time.sleep(3)  # Wait longer for manual restart
-                    try:
-                        websocket_console.sync_current_settings_to_vps()
-                        logging.info("Synced settings to VPS after manual game restart")
-                    except Exception as e:
-                        logging.error(f"Failed to sync settings after manual restart: {e}")
                 
                 import threading
-                sync_thread = threading.Thread(target=delayed_settings_sync)
-                sync_thread.daemon = True
-                sync_thread.start()
+                game_restart_thread = threading.Thread(target=delayed_game_restart_sync)
+                game_restart_thread.daemon = True
+                game_restart_thread.start()
+            
+            # NO else: block - manual restart detection removed
  
         if (line.startswith('Com_TouchMemory:') or 
             ('entered the game.' in line and serverstate.PAUSE_STATE and 
@@ -691,9 +685,15 @@ def process_line(line):
         # TIMEOUT FALLBACK - unpause after extended pause (emergency recovery)
         if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is not None:
             pause_duration = time.time() - PAUSE_STATE_START_TIME
-            if pause_duration > 50:  # 2 minutes timeout
+            # Shorter timeout for vid_restart, longer for other pauses
+            timeout_limit = 30 if serverstate.VID_RESTARTING else 50
+            
+            if pause_duration > timeout_limit:
                 logging.warning(f"State paused for {pause_duration:.0f}s - forcing unpause (emergency recovery)")
                 try:
+                    if serverstate.VID_RESTARTING:
+                        logging.info("Force clearing vid_restart state due to timeout")
+                        serverstate.VID_RESTARTING = False
                     api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
                     serverstate.initialize_state(True)
                     serverstate.PAUSE_STATE = False
