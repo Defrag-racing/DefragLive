@@ -257,7 +257,6 @@ if __name__ == "__main__":
     bot_thread.start()
 
     while True:
-
         try:
             api.api_init()
             time.sleep(5)
@@ -266,6 +265,31 @@ if __name__ == "__main__":
                 logging.info("Found defrag window.")
                 window_flag = True
                 serverstate.PAUSE_STATE = False
+                
+                # NEW: Handle settings sync after unexpected crash recovery
+                def handle_crash_recovery():
+                    """Handle settings sync after unexpected game restart"""
+                    import time
+                    import websocket_console
+                    
+                    try:
+                        # Wait for game to fully initialize before syncing
+                        time.sleep(3)
+                        
+                        logging.info("Crash recovery: Syncing settings to VPS after unexpected restart")
+                        
+                        # Sync current settings to VPS (this will handle writeconfig internally)
+                        websocket_console.sync_current_settings_to_vps()
+                        logging.info("Crash recovery: Successfully synced settings to VPS")
+                        
+                    except Exception as e:
+                        logging.error(f"Crash recovery: Failed to sync settings: {e}")
+                
+                # Run crash recovery in separate thread
+                recovery_thread = threading.Thread(target=handle_crash_recovery)
+                recovery_thread.daemon = True
+                recovery_thread.start()
+                
         except api.WindowNotFoundError:
             if not serverstate.VID_RESTARTING:
                 window_flag = False

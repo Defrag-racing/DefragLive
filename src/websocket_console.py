@@ -71,7 +71,7 @@ def execute_settings_command(content):
         def delayed_writeconfig():
             import time
             global CANCEL_PENDING_WRITECONFIG
-            time.sleep(1)
+            time.sleep(2)
             # Check if writeconfig was cancelled
             if not CANCEL_PENDING_WRITECONFIG:
                 api.exec_command("writeconfig settings-current.cfg")
