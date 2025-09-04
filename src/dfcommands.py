@@ -246,3 +246,17 @@ def cleanup_old_requests(current_time):
     
     for key in keys_to_remove:
         del SPECTATE_REQUESTS[key]
+
+def handle_viewers(line_data):
+    """
+    Display list of recent Twitch viewers/chatters
+    Usage: ?viewers
+    """
+    try:
+        # This triggers the extension to send viewer data via bridge
+        api.exec_command("say ^7Fetching recent viewer list from Twitch extension...")
+        logging.info("Viewer list request initiated - extension will handle display")
+        
+    except Exception as e:
+        logging.error(f"Error in handle_viewers: {e}")
+        api.exec_command("say ^7Error retrieving viewer list.")
