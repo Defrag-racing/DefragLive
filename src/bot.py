@@ -256,6 +256,35 @@ if __name__ == "__main__":
     bot_thread = threading.Thread(target=bot.run, daemon=True)
     bot_thread.start()
 
+    def add_periodic_health_check():
+        """Add a periodic health check to catch stuck states"""
+        def health_check_worker():
+            while True:
+                time.sleep(30)
+                
+                # Check for stuck pause state
+                if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
+                    hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
+                    
+                    stuck_time = time.time() - console.PAUSE_STATE_START_TIME
+                    if stuck_time > 150:  # 2.5 minutes
+                        logging.warning(f"Health check: Bot stuck in pause for {stuck_time:.0f}s")
+                        serverstate.force_connection_recovery("Health check timeout")
+                
+                # Check for stuck connection  
+                if (hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME and
+                    time.time() - serverstate.CONNECTION_START_TIME > 120):  # Use the FORCE_RECOVERY_TIMEOUT value
+                    
+                    logging.warning("Health check: Connection stuck too long")
+                    serverstate.force_connection_recovery("Health check connection timeout")
+        
+        health_thread = threading.Thread(target=health_check_worker, daemon=True)
+        health_thread.start()
+        logging.info("Health check monitor started")
+
+    # Call it once:
+    add_periodic_health_check()
+
     while True:
         try:
             api.api_init()

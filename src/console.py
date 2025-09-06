@@ -432,7 +432,43 @@ def process_line(line):
     global PAUSE_STATE_START_TIME
     
     line = line.strip()
+
+    # ADD THIS ENHANCED TIMEOUT LOGIC HERE:
+    # Set pause timer if not set
+    if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is None:
+        PAUSE_STATE_START_TIME = time.time()
+        logging.info("Pause timer started")
     
+    # Check for absolute timeout if connection tracking exists
+    if hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME:
+        total_stuck_time = time.time() - serverstate.CONNECTION_START_TIME
+        if total_stuck_time > 120:  # 2 minutes absolute timeout
+            logging.error(f"ABSOLUTE TIMEOUT: Bot stuck for {total_stuck_time}s")
+            try:
+                serverstate.force_connection_recovery("Absolute timeout exceeded")
+            except Exception as e:
+                logging.error(f"Force recovery failed: {e}")
+            return
+    
+    # Progressive timeout checks
+    if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is not None:
+        pause_duration = time.time() - PAUSE_STATE_START_TIME
+        
+        # Progressive timeout limits - adjusted for realistic connection times
+        if serverstate.VID_RESTARTING:
+            timeout_limit = 40  # Video restart
+        elif serverstate.CONNECTING:
+            timeout_limit = 75  # Connection + map loading
+        else:
+            timeout_limit = 50  # General pause
+        
+        if pause_duration > timeout_limit:
+            logging.warning(f"State paused for {pause_duration:.0f}s - initiating recovery")
+            try:
+                serverstate.force_connection_recovery(f"Pause timeout ({pause_duration:.0f}s)")
+            except Exception as e:
+                logging.error(f"Recovery failed: {e}")
+
     line_data = {
         "id": message_to_id(f"{time.time()}_MISC"),
         "type": "MISC",
@@ -931,6 +967,7 @@ def process_line(line):
     PREVIOUS_LINE = line_data
     return line_data
 # HELPER
+
 def handle_fuzzy(r, fuzzy):
     if not r:
         return r

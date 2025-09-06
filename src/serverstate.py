@@ -41,6 +41,9 @@ TEAM_CHECK_INTERVAL = 30  # Check every 30 seconds
 AFK_COUNTDOWN_ACTIVE = False
 AFK_HELP_THREADS = []  # Track active help threads
 LAST_GREETING_SERVER = None  # Track which server we last sent greeting to
+CONNECTION_START_TIME = None
+MAX_CONNECTION_TIMEOUT = 90  # 90 seconds max for any connection attempt
+FORCE_RECOVERY_TIMEOUT = 90  # 90 seconds absolute maximum before force recovery
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -1044,6 +1047,90 @@ def connect(ip, caller=None):
         logging.info(f"Reconnecting to same server: {ip}")
 
     api.exec_command("connect " + ip, verbose=False)
+
+def enhanced_connect(ip, caller=None):
+    """Enhanced connect function with better timeout handling"""
+    global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, CURRENT_IP
+    global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS
+    
+    # Record connection start time
+    CONNECTION_START_TIME = time.time()
+    
+    # Cancel any AFK operations
+    AFK_COUNTDOWN_ACTIVE = False
+    AFK_HELP_THREADS.clear()
+    
+    # Set connection state
+    is_new_server = (CURRENT_IP != ip)
+    STATE_INITIALIZED = False
+    logging.info(f"Connecting to {ip}...")
+    PAUSE_STATE = True
+    CONNECTING = True
+    CURRENT_IP = ip
+    
+    if STATE:
+        STATE.idle_counter = 0
+        STATE.afk_counter = 0
+        STATE.afk_ids = []
+    
+    if caller is not None:
+        if STATE:
+            STATE.connect_msg = f"^7Brought by ^3{caller}"
+        IGNORE_IPS = []
+
+    RECONNECTED_CHECK = True
+    
+    # Start connection timeout monitor
+    start_connection_monitor()
+    
+    # Execute connection
+    api.exec_command("connect " + ip, verbose=False)
+
+def start_connection_monitor():
+    """Start a background thread to monitor connection timeout"""
+    def monitor_connection():
+        global CONNECTION_START_TIME, PAUSE_STATE, CONNECTING
+        
+        time.sleep(MAX_CONNECTION_TIMEOUT)
+        
+        # Check if we're still trying to connect after timeout
+        if (CONNECTION_START_TIME and 
+            time.time() - CONNECTION_START_TIME > MAX_CONNECTION_TIMEOUT and
+            (PAUSE_STATE or CONNECTING)):
+            
+            logging.warning(f"Connection timeout after {MAX_CONNECTION_TIMEOUT}s - forcing recovery")
+            force_connection_recovery("Connection timeout")
+    
+    monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
+    monitor_thread.start()
+
+def force_connection_recovery(reason="Unknown"):
+    """Force recovery from stuck connection state"""
+    global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, IGNORE_IPS
+    
+    logging.error(f"FORCE RECOVERY: {reason}")
+    
+    # Reset all connection states
+    PAUSE_STATE = False
+    CONNECTING = False
+    CONNECTION_START_TIME = None
+    
+    # Try to get a different server
+    if CURRENT_IP:
+        IGNORE_IPS.append(CURRENT_IP)
+    
+    # Find next server or enter standby
+    new_ip = servers.get_next_active_server(IGNORE_IPS)
+    
+    if new_ip and new_ip != CURRENT_IP:
+        logging.info(f"Force recovery: trying different server {new_ip}")
+        time.sleep(2)  # Brief pause before retry
+        enhanced_connect(new_ip)
+    else:
+        logging.info("Force recovery: no other servers available, entering standby")
+        IGNORE_IPS = []
+        api.exec_command("map st1")  # Load local map
+        standby_mode_started()
 
 
 def new_report_exists(path):
