@@ -738,8 +738,8 @@ def process_line(line):
                     logging.error(f"Emergency unpause failed: {e}")
 
         def parse_chat_message(command):
-            # CHAT MESSAGE (BY PLAYER) - Simplified pattern
-            chat_message_r = r"(.*):\s*\^(\d)(.*)"  # Any text, colon, optional space, color code, message
+            # CHAT MESSAGE (BY PLAYER) - Improved pattern to handle color codes in names
+            chat_message_r = r"^(.*?):\s*\^(\d)(.*)$"
             match = re.match(chat_message_r, command)
             
             if not match:
@@ -747,6 +747,10 @@ def process_line(line):
             
             chat_name = match.group(1).strip()  # Remove any trailing spaces
             chat_message = match.group(3)       # The actual message content
+            
+            # Remove trailing color codes from the name (like ^7 at the end)
+            # This handles cases where names have color codes attached: "^3Player^7"
+            chat_name = re.sub(r'\^[0-9a-zA-Z]+$', '', chat_name)
             
             # FILTER OUT BOT'S OWN TELL RESPONSES
             if "DefragLive" in chat_name or "LIVE" in chat_name:
@@ -806,10 +810,12 @@ def process_line(line):
                 (command.startswith("^1-> ^2")) or                  # !version responses
                 ("is rank" in command and "of" in command and "with" in command) or   # !time responses
                 "Recent Maps" in command or                         # !recent header
-                (command.startswith("^3") and len(command.split()) >= 3 and not "cet" in command) or  # !recent entries
+                (command.startswith("^3") and len(command.split()) >= 3 and not "cet" in command and ":" not in command) or  # !recent entries
                 "Map Information for" in command or                 # !mapinfo header
                 (command.startswith("^3 ") and ("Weapons:" in command or "Items:" in command or "Functions:" in command or "Created:" in command)) or  # !mapinfo entries
-                (command.startswith("^3") and ("/" in command or ":" in command)) or  # Generic fallback
+                # IMPROVED GENERIC FALLBACK: More specific to avoid catching chat messages
+                (command.startswith("^3") and ("/" in command or ":" in command) and 
+                 not re.match(r"^.*?\^?[0-9a-zA-Z]*:\s*\^[0-9]", command)) or  # Exclude chat message pattern
                 command.strip() == ""):                            # Empty lines
                 
                 line_data["id"] = message_to_id(f"PRINT_PROXY_{command}")
