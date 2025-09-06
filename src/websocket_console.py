@@ -63,6 +63,22 @@ def execute_settings_command(content):
         # RESET flag for regular commands
         CANCEL_PENDING_WRITECONFIG = False
         
+        # Add seta prefix only for extension cvars if not already present
+        extension_cvars = [
+            'r_renderTriggerBrushes', 'r_fastsky', 'r_renderClipBrushes', 'r_renderSlickSurfaces',
+            'r_mapOverbrightBits', 'r_picmip', 'r_fullbright', 'r_gamma', 'cg_drawGun',
+            'df_chs1_Info6', 'cg_lagometer', 'mdd_snap', 'mdd_cgaz', 'df_chs1_Info5',
+            'df_drawSpeed', 'df_chs0_Draw', 'df_chs1_Info7', 'df_mp_NoDrawRadius',
+            'cg_thirdperson', 'df_ghosts_MiniviewDraw', 'cg_gibs', 'com_blood'
+        ]
+        
+        # Check if command starts with any of the extension cvars and add seta if needed
+        for cvar in extension_cvars:
+            if command.startswith(f"{cvar} ") and not command.startswith("seta "):
+                command = f"seta {command}"
+                logging.info(f'[SETTINGS] Modified extension command to use seta: {command}')
+                break
+        
         # Execute the setting command
         api.exec_command(command)
         logging.info(f'[SETTINGS] Executed: {command}')
