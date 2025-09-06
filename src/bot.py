@@ -257,30 +257,34 @@ if __name__ == "__main__":
     bot_thread.start()
 
     def add_periodic_health_check():
-        """Add a periodic health check to catch stuck states"""
+        """Add a periodic health check that works with the new recovery system"""
         def health_check_worker():
             while True:
-                time.sleep(30)
+                time.sleep(45)  # Check every 45 seconds (less frequent)
                 
-                # Check for stuck pause state
-                if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
-                    hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
-                    
-                    stuck_time = time.time() - console.PAUSE_STATE_START_TIME
-                    if stuck_time > 150:  # 2.5 minutes
-                        logging.warning(f"Health check: Bot stuck in pause for {stuck_time:.0f}s")
-                        serverstate.force_connection_recovery("Health check timeout")
+                current_time = time.time()
                 
-                # Check for stuck connection  
-                if (hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME and
-                    time.time() - serverstate.CONNECTION_START_TIME > 120):  # Use the FORCE_RECOVERY_TIMEOUT value
+                # Only trigger if no recovery is in progress
+                if not hasattr(serverstate, 'RECOVERY_IN_PROGRESS') or not serverstate.RECOVERY_IN_PROGRESS:
+                    # Check for stuck pause state (more lenient timing)
+                    if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
+                        hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
+                        
+                        stuck_time = current_time - console.PAUSE_STATE_START_TIME
+                        if stuck_time > 180:  # 3 minutes (more lenient)
+                            logging.warning(f"Health check: Bot stuck in pause for {stuck_time:.0f}s")
+                            serverstate.smart_connection_recovery("Health check pause timeout")
                     
-                    logging.warning("Health check: Connection stuck too long")
-                    serverstate.force_connection_recovery("Health check connection timeout")
+                    # Check for stuck connection with more lenient timing
+                    if (hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME and
+                        current_time - serverstate.CONNECTION_START_TIME > 150):  # 2.5 minutes
+                        
+                        logging.warning("Health check: Connection stuck too long")
+                        serverstate.smart_connection_recovery("Health check connection timeout")
         
         health_thread = threading.Thread(target=health_check_worker, daemon=True)
         health_thread.start()
-        logging.info("Health check monitor started")
+        logging.info("Enhanced health check monitor started")
 
     # Call it once:
     add_periodic_health_check()

@@ -153,27 +153,17 @@ def handle_map_error_with_countdown():
                 'send_time': time.time()
             })
             
-            logging.info("Map error countdown complete. Executing reconnect...")
+            logging.info("Map error countdown complete. Using smart recovery...")
             
-            # Wait a moment then reconnect
+            # Wait a moment then use smart recovery
             time.sleep(2)
             
-            # Use the proper serverstate reconnect function
-            if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
-                current_ip = serverstate.STATE.ip
-                if current_ip:
-                    logging.info(f"Reconnecting to current server after map error: {current_ip}")
-                    serverstate.connect(current_ip)
-                else:
-                    logging.info("No current IP found, using basic reconnect command")
-                    api.exec_command("reconnect")
-            else:
-                logging.info("No state available, using basic reconnect command")
-                api.exec_command("reconnect")
+            # Use smart recovery instead of direct reconnect
+            serverstate.smart_connection_recovery("Map loading error countdown completed")
                 
         except Exception as e:
             logging.error(f"Error during map error countdown: {e}")
-            api.exec_command("reconnect")
+            serverstate.smart_connection_recovery("Map error countdown failed")
         finally:
             MAP_ERROR_COUNTDOWN_ACTIVE = False
     
@@ -241,53 +231,27 @@ def handle_error_with_delay(error_line, error_action):
         
     if error_action == "RECONNECT":
         logging.info(f"Error detected: {error_line}")
-        logging.info("Scheduling reconnect in 5 seconds...")
         
-        # Use threading to avoid blocking the main console reading loop
-        def delayed_reconnect():
-            time.sleep(5)
-            logging.info("Executing delayed reconnect...")
-            
-            # Use the proper serverstate reconnect function instead of just the command
-            # This ensures proper state management and connection flow
-            if hasattr(serverstate, 'STATE') and serverstate.STATE and hasattr(serverstate.STATE, 'ip'):
-                current_ip = serverstate.STATE.ip
-                if current_ip:
-                    logging.info(f"Reconnecting to current server: {current_ip}")
-                    serverstate.connect(current_ip)
-                else:
-                    logging.info("No current IP found, using basic reconnect command")
-                    api.exec_command("reconnect")
-            else:
-                logging.info("No state available, using basic reconnect command")
-                api.exec_command("reconnect")
+        # CHECK FOR CRITICAL CRASHES - skip to attempt 2 (reconnect)
+        if any(crash_indicator in error_line for crash_indicator in [
+            "ACCESS_VIOLATION", 
+            "Exception Code:", 
+            "Signal caught",
+            "forcefully unloading cgame vm"
+        ]):
+            logging.info("Critical crash detected - skipping state resume, going to reconnect")
+            serverstate.RECOVERY_ATTEMPTS = 1  # Skip attempt 1, go to attempt 2
         
-        reconnect_thread = threading.Thread(target=delayed_reconnect)
-        reconnect_thread.daemon = True
-        reconnect_thread.start()
+        logging.info("Starting smart recovery for error...")
+        serverstate.smart_connection_recovery(f"Game error: {error_line}")
         
     elif error_action == "DIFFERENT_IP":
         logging.info(f"Error detected: {error_line}")
-        logging.info("Scheduling IP change reconnect in 5 seconds...")
+        logging.info("Starting smart recovery for IP change...")
         
-        def delayed_ip_reconnect():
-            time.sleep(5)
-            logging.info("Executing delayed IP reconnect...")
-            try:
-                new_ip = servers.get_next_active_server([serverstate.CURRENT_IP] if serverstate.CURRENT_IP else [])
-                if new_ip:
-                    logging.info(f"Connecting to different server: {new_ip}")
-                    serverstate.connect(new_ip)
-                else:
-                    logging.error("Could not get a different server IP, trying basic reconnect")
-                    api.exec_command("reconnect")
-            except Exception as e:
-                logging.error(f"Failed to get different server: {e}, trying basic reconnect")
-                api.exec_command("reconnect")
-        
-        reconnect_thread = threading.Thread(target=delayed_ip_reconnect)
-        reconnect_thread.daemon = True
-        reconnect_thread.start()
+        # Use smart recovery but skip to attempt 3 (different server)
+        serverstate.RECOVERY_ATTEMPTS = 2  # Skip to different server attempt
+        serverstate.smart_connection_recovery(f"IP change error: {error_line}")
 
 
 def read_tail(thefile):
@@ -450,22 +414,22 @@ def process_line(line):
                 logging.error(f"Force recovery failed: {e}")
             return
     
-    # Progressive timeout checks
+    # Progressive timeout checks - more lenient and uses smart recovery
     if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is not None:
         pause_duration = time.time() - PAUSE_STATE_START_TIME
         
-        # Progressive timeout limits - adjusted for realistic connection times
+        # More lenient timeout limits
         if serverstate.VID_RESTARTING:
-            timeout_limit = 40  # Video restart
+            timeout_limit = 60  # Video restart - more time
         elif serverstate.CONNECTING:
-            timeout_limit = 75  # Connection + map loading
+            timeout_limit = 120  # Connection + map loading - much more time
         else:
-            timeout_limit = 50  # General pause
+            timeout_limit = 90  # General pause - more time
         
         if pause_duration > timeout_limit:
-            logging.warning(f"State paused for {pause_duration:.0f}s - initiating recovery")
+            logging.warning(f"State paused for {pause_duration:.0f}s - starting smart recovery")
             try:
-                serverstate.force_connection_recovery(f"Pause timeout ({pause_duration:.0f}s)")
+                serverstate.smart_connection_recovery(f"Pause timeout ({pause_duration:.0f}s)")
             except Exception as e:
                 logging.error(f"Recovery failed: {e}")
 
@@ -607,19 +571,14 @@ def process_line(line):
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
-        if line.startswith('Com_TouchMemory:'):
-            time.sleep(3)
-            api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
-            serverstate.initialize_state(True)
-            serverstate.PAUSE_STATE = False
-            # Reset timer when pause state is cleared
-            PAUSE_STATE_START_TIME = None
-
         if (line.startswith('Not recording a demo.') or 
             line.startswith("report written to system/reports/initialstate.txt") or
             line.startswith("Sound memory manager started") or
             "GL_RENDERER:" in line or
-            "MODE: -1," in line):
+            "MODE: -1," in line or
+            # ADD THIS NEW CONDITION - detect when bot enters game during connection
+            (line.endswith(" entered the game.") and serverstate.CONNECTING and 
+             ("DefragLive" in line or "LIVE" in line))):
             
             # PRIORITY ORDER: Check most specific conditions first
             if serverstate.VID_RESTARTING:
@@ -629,6 +588,10 @@ def process_line(line):
                 serverstate.PAUSE_STATE = False
                 serverstate.VID_RESTARTING = False
                 PAUSE_STATE_START_TIME = None
+                
+                if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
+                    serverstate.reset_recovery_state()
+                    logging.info("Connection successful - recovery state cleared")
                 
                 # Process queued settings first, then sync
                 websocket_console.process_queued_settings()
@@ -653,7 +616,12 @@ def process_line(line):
                 time.sleep(1)
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
+                serverstate.CONNECTION_START_TIME = None  # ADD THIS LINE
                 logging.info("Connection complete. Continuing state.")
+                
+                if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
+                    serverstate.reset_recovery_state()
+                    logging.info("Connection successful - recovery state cleared")
                 
                 # GREETING LOGIC - triggered when connection actually completes
                 logging.info(f"[GREETING DEBUG] Connection complete - LAST_GREETING_SERVER: {serverstate.LAST_GREETING_SERVER}")
@@ -675,6 +643,18 @@ def process_line(line):
                 
                 PAUSE_STATE_START_TIME = None
                 
+                # FORCE STATE INITIALIZATION after connection
+                def delayed_state_init():
+                    import time
+                    time.sleep(3)  # Wait for connection to fully establish
+                    logging.info("Forcing state initialization after connection")
+                    api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+                    serverstate.initialize_state(True)
+                
+                import threading
+                init_thread = threading.Thread(target=delayed_state_init, daemon=True)
+                init_thread.start()
+                
             elif serverstate.PAUSE_STATE:
                 # Game restart completion - THIRD PRIORITY
                 time.sleep(1)
@@ -682,6 +662,10 @@ def process_line(line):
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()
                 PAUSE_STATE_START_TIME = None
+                
+                if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
+                    serverstate.reset_recovery_state()
+                    logging.info("Connection successful - recovery state cleared")
                 
                 # SYNC SETTINGS AFTER GAME RESTART
                 def delayed_game_restart_sync():

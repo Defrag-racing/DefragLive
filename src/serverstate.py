@@ -44,6 +44,11 @@ LAST_GREETING_SERVER = None  # Track which server we last sent greeting to
 CONNECTION_START_TIME = None
 MAX_CONNECTION_TIMEOUT = 90  # 90 seconds max for any connection attempt
 FORCE_RECOVERY_TIMEOUT = 90  # 90 seconds absolute maximum before force recovery
+RECOVERY_IN_PROGRESS = False
+RECOVERY_ATTEMPTS = 0
+MAX_RECOVERY_ATTEMPTS = 3
+LAST_RECOVERY_TIME = 0
+RECOVERY_COOLDOWN = 15  # 15 seconds between recovery attempts
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -1048,10 +1053,181 @@ def connect(ip, caller=None):
 
     api.exec_command("connect " + ip, verbose=False)
 
+def attempt_state_resume():
+    """
+    Try to resume normal state without reconnecting
+    This checks if the connection actually worked but we just got stuck
+    """
+    global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME
+    
+    try:
+        logging.info("Attempting to resume normal state...")
+        
+        # Try to get fresh server info to see if we're actually connected
+        api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
+        
+        # Wait a moment for reports to generate
+        time.sleep(2)
+        
+        # Check if we can read valid server info
+        if new_report_exists(config.STATE_REPORT_P):
+            server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
+            
+            if server_info and players:
+                logging.info("State resume successful - connection was actually working!")
+                
+                # Resume normal operation
+                PAUSE_STATE = False
+                CONNECTING = False
+                CONNECTION_START_TIME = None
+                
+                # Reinitialize state properly
+                initialize_state(True)
+                
+                # Mark recovery as successful
+                reset_recovery_state()
+                return True
+        
+        logging.info("State resume failed - no valid server data")
+        return False
+        
+    except Exception as e:
+        logging.error(f"Error during state resume attempt: {e}")
+        return False
+
+def smart_connection_recovery(reason="Unknown"):
+    """
+    Smart recovery system that tries multiple strategies before giving up:
+    1. First attempt: Try to resume normal state (reinitialize)
+    2. Second attempt: Reconnect to same server
+    3. Third attempt: Try different server
+    4. Final fallback: Standby mode
+    """
+    global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, LAST_RECOVERY_TIME
+    global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME
+    
+    current_time = time.time()
+    
+    # Prevent multiple simultaneous recoveries
+    if RECOVERY_IN_PROGRESS:
+        logging.info(f"Recovery already in progress, ignoring: {reason}")
+        return
+    
+    # Check if this is a critical crash that should bypass cooldown
+    is_critical_crash = any(crash_indicator in reason for crash_indicator in [
+        "ACCESS_VIOLATION", 
+        "Exception Code:", 
+        "Signal caught",
+        "forcefully unloading cgame vm",
+        "Game error: Exception Code:",
+        "Game error: ACCESS_VIOLATION"
+    ])
+    
+    # Cooldown check - SKIP for critical crashes
+    if not is_critical_crash and current_time - LAST_RECOVERY_TIME < RECOVERY_COOLDOWN:
+        logging.info(f"Recovery on cooldown, ignoring: {reason}")
+        return
+    
+    # For critical crashes, log that we're bypassing cooldown
+    if is_critical_crash and current_time - LAST_RECOVERY_TIME < RECOVERY_COOLDOWN:
+        logging.warning(f"Critical crash detected - bypassing recovery cooldown: {reason}")
+    
+    RECOVERY_IN_PROGRESS = True
+    LAST_RECOVERY_TIME = current_time
+    RECOVERY_ATTEMPTS += 1
+    
+    logging.error(f"SMART RECOVERY #{RECOVERY_ATTEMPTS}: {reason}")
+    
+    try:
+        if RECOVERY_ATTEMPTS == 1:
+            # First attempt: Try to resume normal state
+            logging.info("Recovery attempt 1: Trying to resume normal state")
+            if attempt_state_resume():
+                return  # Success, exit recovery
+            
+        elif RECOVERY_ATTEMPTS == 2:
+            # Second attempt: Reconnect to same server
+            logging.info("Recovery attempt 2: Reconnecting to same server")
+            if CURRENT_IP:
+                # Reset connection state
+                PAUSE_STATE = True
+                CONNECTING = True
+                CONNECTION_START_TIME = time.time()
+                api.exec_command(f"reconnect", verbose=False)
+                start_connection_monitor()
+            else:
+                # No current IP, skip to next attempt
+                RECOVERY_ATTEMPTS += 1
+                smart_connection_recovery("No current IP for reconnect")
+                return
+                
+        elif RECOVERY_ATTEMPTS == 3:
+            # Third attempt: Try different server
+            logging.info("Recovery attempt 3: Trying different server")
+            if CURRENT_IP:
+                IGNORE_IPS.append(CURRENT_IP)
+            
+            new_ip = servers.get_next_active_server(IGNORE_IPS)
+            if new_ip and new_ip != CURRENT_IP:
+                logging.info(f"Recovery: trying different server {new_ip}")
+                time.sleep(2)  # Brief pause before retry
+                enhanced_connect(new_ip)
+            else:
+                # No other servers, go to final fallback
+                RECOVERY_ATTEMPTS += 1
+                smart_connection_recovery("No other servers available")
+                return
+                
+        else:
+            # Final fallback: Standby mode
+            logging.info("Recovery attempt 4: Entering standby mode")
+            reset_recovery_state()
+            IGNORE_IPS = []
+            PAUSE_STATE = False
+            CONNECTING = False
+            CONNECTION_START_TIME = None
+            api.exec_command("map st1")  # Load local map
+            standby_mode_started()
+            return
+            
+        # Start timeout monitor for this recovery attempt
+        start_recovery_timeout()
+        
+    except Exception as e:
+        logging.error(f"Error during recovery attempt {RECOVERY_ATTEMPTS}: {e}")
+        # If this attempt failed, try next one after brief delay
+        time.sleep(2)
+        smart_connection_recovery(f"Recovery attempt {RECOVERY_ATTEMPTS} failed: {e}")
+
+def reset_recovery_state():
+    """Reset recovery tracking variables"""
+    global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS
+    RECOVERY_IN_PROGRESS = False
+    RECOVERY_ATTEMPTS = 0
+    logging.info("Recovery state reset")
+
+def start_recovery_timeout():
+    """Start a timeout for the current recovery attempt"""
+    def recovery_timeout_worker():
+        import time
+        time.sleep(60)  # Give each recovery attempt 60 seconds
+        
+        if RECOVERY_IN_PROGRESS:
+            logging.warning(f"Recovery attempt {RECOVERY_ATTEMPTS} timed out")
+            smart_connection_recovery(f"Recovery attempt {RECOVERY_ATTEMPTS} timeout")
+    
+    timeout_thread = threading.Thread(target=recovery_timeout_worker, daemon=True)
+    timeout_thread.start()
+
 def enhanced_connect(ip, caller=None):
     """Enhanced connect function with better timeout handling"""
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, CURRENT_IP
-    global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS
+    global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS, RECOVERY_IN_PROGRESS
+    global STATE_INITIALIZED, RECONNECTED_CHECK
+    
+    # Reset recovery state for new connections
+    if ip != CURRENT_IP:
+        reset_recovery_state()
     
     # Record connection start time
     CONNECTION_START_TIME = time.time()
@@ -1080,7 +1256,7 @@ def enhanced_connect(ip, caller=None):
 
     RECONNECTED_CHECK = True
     
-    # Start connection timeout monitor
+    # Start connection monitor
     start_connection_monitor()
     
     # Execute connection
@@ -1105,33 +1281,8 @@ def start_connection_monitor():
     monitor_thread.start()
 
 def force_connection_recovery(reason="Unknown"):
-    """Force recovery from stuck connection state"""
-    global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, IGNORE_IPS
-    
-    logging.error(f"FORCE RECOVERY: {reason}")
-    
-    # Reset all connection states
-    PAUSE_STATE = False
-    CONNECTING = False
-    CONNECTION_START_TIME = None
-    
-    # Try to get a different server
-    if CURRENT_IP:
-        IGNORE_IPS.append(CURRENT_IP)
-    
-    # Find next server or enter standby
-    new_ip = servers.get_next_active_server(IGNORE_IPS)
-    
-    if new_ip and new_ip != CURRENT_IP:
-        logging.info(f"Force recovery: trying different server {new_ip}")
-        time.sleep(2)  # Brief pause before retry
-        enhanced_connect(new_ip)
-    else:
-        logging.info("Force recovery: no other servers available, entering standby")
-        IGNORE_IPS = []
-        api.exec_command("map st1")  # Load local map
-        standby_mode_started()
-
+    """Force recovery from stuck connection state - now uses smart recovery"""
+    smart_connection_recovery(reason)
 
 def new_report_exists(path):
     """
