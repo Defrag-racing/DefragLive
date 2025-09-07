@@ -1108,9 +1108,23 @@ def smart_connection_recovery(reason="Unknown"):
     
     current_time = time.time()
     
-    # Prevent multiple simultaneous recoveries
-    if RECOVERY_IN_PROGRESS:
-        logging.info(f"Recovery already in progress, ignoring: {reason}")
+    # Check if recovery has been stuck for too long (2 minutes absolute timeout)
+    if RECOVERY_IN_PROGRESS and current_time - LAST_RECOVERY_TIME > 120:
+        logging.error(f"RECOVERY DEADLOCK: Recovery stuck for 120s, forcing full reset. Reason: {reason}")
+        reset_recovery_state()
+        PAUSE_STATE = False
+        CONNECTING = False
+        CONNECTION_START_TIME = None
+        api.exec_command("map st1")
+        import threading
+        standby_thread = threading.Thread(target=standby_mode_started, daemon=True)
+        standby_thread.start()
+        return
+    
+    # Prevent multiple simultaneous recoveries (but allow timeout-forced progression)
+    if RECOVERY_IN_PROGRESS and not reason.startswith("Forced progression"):
+        time_stuck = current_time - LAST_RECOVERY_TIME
+        logging.warning(f"RECOVERY BLOCKED: Already in progress for {time_stuck:.0f}s, ignoring: {reason}")
         return
     
     # Check if this is a critical crash that should bypass cooldown
@@ -1136,18 +1150,21 @@ def smart_connection_recovery(reason="Unknown"):
     LAST_RECOVERY_TIME = current_time
     RECOVERY_ATTEMPTS += 1
     
-    logging.error(f"SMART RECOVERY #{RECOVERY_ATTEMPTS}: {reason}")
+    # ADD ENHANCED LOGGING HERE
+    logging.error(f"RECOVERY START: Attempt #{RECOVERY_ATTEMPTS}, Reason: {reason}")
+    logging.error(f"RECOVERY STATE: PAUSE={PAUSE_STATE}, CONNECTING={CONNECTING}, VID_RESTART={VID_RESTARTING}")
+    logging.error(f"RECOVERY TIMING: Last={LAST_RECOVERY_TIME}, Current={current_time}")
     
     try:
         if RECOVERY_ATTEMPTS == 1:
             # First attempt: Try to resume normal state
-            logging.info("Recovery attempt 1: Trying to resume normal state")
+            logging.error("RECOVERY ATTEMPT 1: Trying state resume")
             if attempt_state_resume():
                 return  # Success, exit recovery
             
         elif RECOVERY_ATTEMPTS == 2:
             # Second attempt: Reconnect to same server
-            logging.info("Recovery attempt 2: Reconnecting to same server")
+            logging.error("RECOVERY ATTEMPT 2: Reconnecting to same server")
             if CURRENT_IP:
                 # Reset connection state
                 PAUSE_STATE = True
@@ -1163,7 +1180,7 @@ def smart_connection_recovery(reason="Unknown"):
                 
         elif RECOVERY_ATTEMPTS == 3:
             # Third attempt: Try different server
-            logging.info("Recovery attempt 3: Trying different server")
+            logging.error("RECOVERY ATTEMPT 3: Trying different server")
             if CURRENT_IP:
                 IGNORE_IPS.append(CURRENT_IP)
             
@@ -1180,7 +1197,7 @@ def smart_connection_recovery(reason="Unknown"):
                 
         else:
             # Final fallback: Standby mode
-            logging.info("Recovery attempt 4: Entering standby mode")
+            logging.error("RECOVERY ATTEMPT 4: Entering standby mode")
             reset_recovery_state()
             IGNORE_IPS = []
             PAUSE_STATE = False
@@ -1191,13 +1208,29 @@ def smart_connection_recovery(reason="Unknown"):
             return
             
         # Start timeout monitor for this recovery attempt
+        logging.error(f"RECOVERY TIMEOUT: Starting 60s monitor for attempt {RECOVERY_ATTEMPTS}")
         start_recovery_timeout()
         
     except Exception as e:
-        logging.error(f"Error during recovery attempt {RECOVERY_ATTEMPTS}: {e}")
-        # If this attempt failed, try next one after brief delay
-        time.sleep(2)
-        smart_connection_recovery(f"Recovery attempt {RECOVERY_ATTEMPTS} failed: {e}")
+        logging.critical(f"RECOVERY EXCEPTION: Error during attempt {RECOVERY_ATTEMPTS}: {e}")
+        # Force standby on any exception
+        reset_recovery_state()
+        PAUSE_STATE = False
+        api.exec_command("map st1")
+
+def check_recovery_deadlock():
+    """Check if recovery system is deadlocked and force reset if needed"""
+    global RECOVERY_IN_PROGRESS, LAST_RECOVERY_TIME, PAUSE_STATE
+    
+    if RECOVERY_IN_PROGRESS:
+        stuck_time = time.time() - LAST_RECOVERY_TIME
+        if stuck_time > 150:  # 2.5 minutes absolute deadlock protection
+            logging.critical(f"RECOVERY DEADLOCK DETECTED: Stuck for {stuck_time:.0f}s - forcing emergency reset")
+            reset_recovery_state()
+            PAUSE_STATE = False
+            api.exec_command("map st1")
+            return True
+    return False
 
 def reset_recovery_state():
     """Reset recovery tracking variables"""
@@ -1212,9 +1245,72 @@ def start_recovery_timeout():
         import time
         time.sleep(60)  # Give each recovery attempt 60 seconds
         
+        global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, PAUSE_STATE, CONNECTING
+        
         if RECOVERY_IN_PROGRESS:
-            logging.warning(f"Recovery attempt {RECOVERY_ATTEMPTS} timed out")
-            smart_connection_recovery(f"Recovery attempt {RECOVERY_ATTEMPTS} timeout")
+            logging.error(f"RECOVERY TIMEOUT: Attempt {RECOVERY_ATTEMPTS} stuck for 60s, forcing progression")
+            
+            # Force progression to next attempt
+            if RECOVERY_ATTEMPTS >= MAX_RECOVERY_ATTEMPTS:
+                logging.error("RECOVERY TIMEOUT: Max attempts reached, forcing standby")
+                reset_recovery_state()
+                PAUSE_STATE = False
+                CONNECTING = False
+                api.exec_command("map st1")
+                import threading
+                standby_thread = threading.Thread(target=standby_mode_started, daemon=True)
+                standby_thread.start()
+            else:
+                # DIRECTLY FORCE NEXT ATTEMPT - don't call smart_connection_recovery
+                logging.error(f"RECOVERY TIMEOUT: Directly forcing attempt {RECOVERY_ATTEMPTS + 1}")
+                RECOVERY_ATTEMPTS += 1  # Increment attempt counter
+                
+                # Directly handle next attempt based on attempt number
+                if RECOVERY_ATTEMPTS == 2:
+                    # Attempt 2: Reconnect to same server
+                    logging.error("TIMEOUT RECOVERY: Attempt 2 - Reconnecting to same server")
+                    if CURRENT_IP:
+                        PAUSE_STATE = True
+                        CONNECTING = True
+                        CONNECTION_START_TIME = time.time()
+                        api.exec_command("reconnect", verbose=False)
+                        start_connection_monitor()
+                        start_recovery_timeout()  # Start timeout for this attempt
+                    else:
+                        # Skip to next attempt
+                        smart_connection_recovery("No current IP for reconnect")
+                        
+                elif RECOVERY_ATTEMPTS == 3:
+                    # Attempt 3: Try different server
+                    logging.error("TIMEOUT RECOVERY: Attempt 3 - Trying different server")
+                    if CURRENT_IP:
+                        IGNORE_IPS.append(CURRENT_IP)
+                    
+                    new_ip = servers.get_next_active_server(IGNORE_IPS)
+                    if new_ip and new_ip != CURRENT_IP:
+                        logging.info(f"TIMEOUT RECOVERY: trying different server {new_ip}")
+                        time.sleep(2)
+                        enhanced_connect(new_ip)
+                    else:
+                        # No other servers, go to standby
+                        logging.error("TIMEOUT RECOVERY: No other servers, forcing standby")
+                        reset_recovery_state()
+                        PAUSE_STATE = False
+                        CONNECTING = False
+                        api.exec_command("map st1")
+                        import threading
+                        standby_thread = threading.Thread(target=standby_mode_started, daemon=True)
+                        standby_thread.start()
+                else:
+                    # Attempt 4+: Force standby
+                    logging.error("TIMEOUT RECOVERY: Max attempts exceeded, forcing standby")
+                    reset_recovery_state()
+                    PAUSE_STATE = False
+                    CONNECTING = False
+                    api.exec_command("map st1")
+                    import threading
+                    standby_thread = threading.Thread(target=standby_mode_started, daemon=True)
+                    standby_thread.start()
     
     timeout_thread = threading.Thread(target=recovery_timeout_worker, daemon=True)
     timeout_thread.start()
@@ -1298,7 +1394,6 @@ def new_report_exists(path):
         LAST_REPORT_TIME = curr_report_mod_time
     return curr_report_mod_time > last_report_ts
 
-
 async def switch_spec(direction='next', channel=None):
     """
     Handles "smart" spec switch. Resets data relevant to old connections and players. Can move either forward (default)
@@ -1307,13 +1402,36 @@ async def switch_spec(direction='next', channel=None):
     global STATE
     global IGNORE_IPS
 
+    # ADD STATE VALIDATION
+    if STATE is None:
+        logging.error("Cannot switch spec: STATE is None")
+        if channel:
+            await channel.send("Bot state not available")
+        return False
+
     IGNORE_IPS = []
     STATE.afk_list = []
     spec_ids = STATE.spec_ids if direction == 'next' else STATE.spec_ids[::-1]  # Reverse spec_list if going backwards.
 
+    # ADD EMPTY LIST CHECK
+    if not spec_ids:
+        msg = "No players available to spectate"
+        api.display_message(f"^7{msg}")
+        logging.info(msg)
+        if channel:
+            await channel.send(msg)
+        return False
+
     if STATE.current_player_id != STATE.bot_id:
-        # Determine the next followable id. If current id is at the last index, wrap to the beginning of the list.
-        next_id_index = spec_ids.index(STATE.current_player_id) + 1
+        # ADD SAFETY CHECK FOR CURRENT PLAYER IN LIST
+        try:
+            current_index = spec_ids.index(STATE.current_player_id)
+            next_id_index = current_index + 1
+        except ValueError:
+            # Current player not in spec list, start from beginning
+            logging.warning(f"Current player {STATE.current_player_id} not in spec_ids, starting from first player")
+            next_id_index = 0
+        
         if next_id_index > len(spec_ids) - 1:
             next_id_index = 0
         follow_id = spec_ids[next_id_index]
@@ -1333,7 +1451,6 @@ async def switch_spec(direction='next', channel=None):
             STATE.afk_counter = 0
 
     return True
-
 
 def spectate_player(follow_id):
     """Spectate player chosen by twich users based on their client id"""

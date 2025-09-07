@@ -278,7 +278,6 @@ def read_tail(thefile):
 
         yield line
 
-
 def read(file_path: str):
     """
     Reads the console log file every second and sends the console lines for processing
@@ -311,8 +310,16 @@ def read(file_path: str):
 
             line_data = process_line(line)
 
+            # ADD NULL CHECK HERE - CRITICAL FIX
+            if line_data is None:
+                continue
+
             # Filter
             line_data = filters.filter_line_data(line_data)
+
+            # ADD ANOTHER NULL CHECK AFTER FILTERING
+            if line_data is None:
+                continue
 
             LOG.append(line_data)
 
@@ -320,9 +327,8 @@ def read(file_path: str):
             if (len(LOG) > 5000):
                 LOG = LOG[1000:]
 
-            # if line_data.pop("command") is not None:
-            # if line_data.pop("command") is not None:
-            if 'command' in line_data and line_data['command'] is not None:
+            # SAFE CHECK FOR COMMAND - FIXED
+            if line_data and isinstance(line_data, dict) and 'command' in line_data and line_data['command'] is not None:
                command = line_data['command']
                handle_command = getattr(cmd, f"handle_{command}")
                try:
@@ -355,7 +361,6 @@ def read(file_path: str):
                         'message': line_data,
                         'send_time': time.time() + 2  # 2 second delay for everything
                     })
-
 
 def message_to_id(msg):
     return blake2b(bytes(msg, "utf-8"), digest_size=8, salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()
@@ -397,7 +402,15 @@ def process_line(line):
     
     line = line.strip()
 
-    # ADD THIS ENHANCED TIMEOUT LOGIC HERE:
+    # ADD DEADLOCK CHECK EARLY
+    if hasattr(serverstate, 'check_recovery_deadlock'):
+        try:
+            if serverstate.check_recovery_deadlock():
+                logging.critical("Emergency recovery deadlock reset triggered from console")
+        except Exception as e:
+            logging.error(f"Error in deadlock check: {e}")
+
+    # SET PAUSE TIMER AND ENHANCED TIMEOUT LOGIC
     # Set pause timer if not set
     if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is None:
         PAUSE_STATE_START_TIME = time.time()
@@ -418,8 +431,10 @@ def process_line(line):
     if serverstate.PAUSE_STATE and PAUSE_STATE_START_TIME is not None:
         pause_duration = time.time() - PAUSE_STATE_START_TIME
         
-        # More lenient timeout limits
-        if serverstate.VID_RESTARTING:
+        # More aggressive timeout for recovery situations
+        if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
+            timeout_limit = 90  # 90 seconds during recovery
+        elif serverstate.VID_RESTARTING:
             timeout_limit = 60  # Video restart - more time
         elif serverstate.CONNECTING:
             timeout_limit = 120  # Connection + map loading - much more time
@@ -427,11 +442,15 @@ def process_line(line):
             timeout_limit = 90  # General pause - more time
         
         if pause_duration > timeout_limit:
-            logging.warning(f"State paused for {pause_duration:.0f}s - starting smart recovery")
+            logging.error(f"PAUSE TIMEOUT: State paused for {pause_duration:.0f}s - triggering smart recovery")
             try:
                 serverstate.smart_connection_recovery(f"Pause timeout ({pause_duration:.0f}s)")
             except Exception as e:
-                logging.error(f"Recovery failed: {e}")
+                logging.error(f"Smart recovery failed: {e}")
+                # Emergency fallback
+                logging.critical("EMERGENCY FALLBACK: Direct standby mode")
+                serverstate.PAUSE_STATE = False
+                api.exec_command("map st1")
 
     line_data = {
         "id": message_to_id(f"{time.time()}_MISC"),
@@ -571,6 +590,9 @@ def process_line(line):
                 serverstate.STATE.init_vote()
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
+        if serverstate.CONNECTING:
+            logging.info(f"[DEBUG] CONNECTING=True, checking line: {line}")
+
         if (line.startswith('Not recording a demo.') or 
             line.startswith("report written to system/reports/initialstate.txt") or
             line.startswith("Sound memory manager started") or
@@ -579,6 +601,9 @@ def process_line(line):
             # ADD THIS NEW CONDITION - detect when bot enters game during connection
             (line.endswith(" entered the game.") and serverstate.CONNECTING and 
              ("DefragLive" in line or "LIVE" in line))):
+            
+            # Add this debug line as the FIRST line inside the if block
+            logging.info(f"[DEBUG] Connection detection triggered by: {line}")
             
             # PRIORITY ORDER: Check most specific conditions first
             if serverstate.VID_RESTARTING:
@@ -594,7 +619,9 @@ def process_line(line):
                     logging.info("Connection successful - recovery state cleared")
                 
                 # Process queued settings first, then sync
+                logging.info(f"[SETTINGS DEBUG] Queue size before processing: {len(websocket_console.SETTINGS_QUEUE)}")
                 websocket_console.process_queued_settings()
+                logging.info(f"[SETTINGS DEBUG] Queue size after processing: {len(websocket_console.SETTINGS_QUEUE)}")
                 
                 def delayed_vid_restart_sync():
                     import time
@@ -618,6 +645,8 @@ def process_line(line):
                 serverstate.PAUSE_STATE = False
                 serverstate.CONNECTION_START_TIME = None  # ADD THIS LINE
                 logging.info("Connection complete. Continuing state.")
+                
+                logging.info(f"DEBUG: About to process queued settings. Queue size: {len(websocket_console.SETTINGS_QUEUE)}")
                 
                 if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
                     serverstate.reset_recovery_state()
@@ -954,9 +983,19 @@ def process_line(line):
         logging.error(f"Error processing line: {e}")
         return line_data
 
+    # ENSURE we always return a valid dict (add at the very end)
+    if line_data is None:
+        line_data = {
+            "id": message_to_id(f"{time.time()}_FALLBACK"),
+            "type": "MISC",
+            "command": None,
+            "author": None,
+            "content": line.strip() if line else "",
+            "timestamp": time.time()
+        }
+
     PREVIOUS_LINE = line_data
     return line_data
-# HELPER
 
 def handle_fuzzy(r, fuzzy):
     if not r:

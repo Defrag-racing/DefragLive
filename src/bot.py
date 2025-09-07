@@ -257,34 +257,44 @@ if __name__ == "__main__":
     bot_thread.start()
 
     def add_periodic_health_check():
-        """Add a periodic health check that works with the new recovery system"""
         def health_check_worker():
             while True:
-                time.sleep(45)  # Check every 45 seconds (less frequent)
+                time.sleep(30)  # Check every 30 seconds
                 
                 current_time = time.time()
                 
-                # Only trigger if no recovery is in progress
-                if not hasattr(serverstate, 'RECOVERY_IN_PROGRESS') or not serverstate.RECOVERY_IN_PROGRESS:
-                    # Check for stuck pause state (more lenient timing)
-                    if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
-                        hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
-                        
-                        stuck_time = current_time - console.PAUSE_STATE_START_TIME
-                        if stuck_time > 180:  # 3 minutes (more lenient)
-                            logging.warning(f"Health check: Bot stuck in pause for {stuck_time:.0f}s")
-                            serverstate.smart_connection_recovery("Health check pause timeout")
+                # Check for recovery deadlock
+                if (hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS and
+                    hasattr(serverstate, 'LAST_RECOVERY_TIME') and serverstate.LAST_RECOVERY_TIME):
                     
-                    # Check for stuck connection with more lenient timing
-                    if (hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME and
-                        current_time - serverstate.CONNECTION_START_TIME > 150):  # 2.5 minutes
-                        
-                        logging.warning("Health check: Connection stuck too long")
-                        serverstate.smart_connection_recovery("Health check connection timeout")
+                    recovery_stuck_time = current_time - serverstate.LAST_RECOVERY_TIME
+                    if recovery_stuck_time > 100:  # 100 seconds
+                        logging.critical(f"HEALTH CHECK: Recovery deadlock detected ({recovery_stuck_time:.0f}s)")
+                        try:
+                            serverstate.reset_recovery_state()
+                            serverstate.PAUSE_STATE = False
+                            api.exec_command("map st1")
+                            logging.critical("HEALTH CHECK: Forced emergency reset")
+                        except Exception as e:
+                            logging.critical(f"HEALTH CHECK: Emergency reset failed: {e}")
+                
+                # Check for general pause deadlock
+                if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
+                    hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
+                    
+                    pause_stuck_time = current_time - console.PAUSE_STATE_START_TIME
+                    if pause_stuck_time > 120:  # 2 minutes
+                        logging.critical(f"HEALTH CHECK: Pause deadlock detected ({pause_stuck_time:.0f}s)")
+                        try:
+                            serverstate.PAUSE_STATE = False
+                            api.exec_command("map st1")
+                            logging.critical("HEALTH CHECK: Forced pause reset")
+                        except Exception as e:
+                            logging.critical(f"HEALTH CHECK: Pause reset failed: {e}")
         
         health_thread = threading.Thread(target=health_check_worker, daemon=True)
         health_thread.start()
-        logging.info("Enhanced health check monitor started")
+        logging.info("Enhanced deadlock detection health check started")
 
     # Call it once:
     add_periodic_health_check()
