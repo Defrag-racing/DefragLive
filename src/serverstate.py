@@ -1099,9 +1099,9 @@ def smart_connection_recovery(reason="Unknown"):
     """
     Smart recovery system that tries multiple strategies before giving up:
     1. First attempt: Try to resume normal state (reinitialize)
-    2. Second attempt: Reconnect to same server
-    3. Third attempt: Try different server
-    4. Final fallback: Standby mode
+    2-4. Attempts 2-4: Reconnect to same server (3 retry attempts)
+    5. Fifth attempt: Try different server  
+    6+. Final fallback: Standby mode
     """
     global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, LAST_RECOVERY_TIME
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME
@@ -1162,25 +1162,29 @@ def smart_connection_recovery(reason="Unknown"):
             if attempt_state_resume():
                 return  # Success, exit recovery
             
-        elif RECOVERY_ATTEMPTS == 2:
-            # Second attempt: Reconnect to same server
-            logging.error("RECOVERY ATTEMPT 2: Reconnecting to same server")
+        elif RECOVERY_ATTEMPTS in [2, 3, 4]:
+            # Attempts 2-4: Reconnect to same server (3 attempts)
+            logging.error(f"RECOVERY ATTEMPT {RECOVERY_ATTEMPTS}: Reconnecting to same server")
             if CURRENT_IP:
-                # Reset connection state
+                # Reset connection state - be more aggressive about cleanup
                 PAUSE_STATE = True
                 CONNECTING = True
                 CONNECTION_START_TIME = time.time()
-                api.exec_command(f"reconnect", verbose=False)
+                
+                # More robust reconnect - disconnect first, then reconnect
+                api.exec_command("disconnect", verbose=False)
+                time.sleep(3)  # 3 second delay between disconnect and reconnect
+                api.exec_command("connect " + CURRENT_IP, verbose=False)
                 start_connection_monitor()
             else:
-                # No current IP, skip to next attempt
-                RECOVERY_ATTEMPTS += 1
+                # No current IP, skip to different server attempt
+                RECOVERY_ATTEMPTS = 4  # Skip to attempt 5 (different server)
                 smart_connection_recovery("No current IP for reconnect")
                 return
                 
-        elif RECOVERY_ATTEMPTS == 3:
-            # Third attempt: Try different server
-            logging.error("RECOVERY ATTEMPT 3: Trying different server")
+        elif RECOVERY_ATTEMPTS == 5:
+            # Fifth attempt: Try different server
+            logging.error("RECOVERY ATTEMPT 5: Trying different server")
             if CURRENT_IP:
                 IGNORE_IPS.append(CURRENT_IP)
             
@@ -1197,7 +1201,7 @@ def smart_connection_recovery(reason="Unknown"):
                 
         else:
             # Final fallback: Standby mode
-            logging.error("RECOVERY ATTEMPT 4: Entering standby mode")
+            logging.error("RECOVERY ATTEMPT 6+: Entering standby mode")
             reset_recovery_state()
             IGNORE_IPS = []
             PAUSE_STATE = False

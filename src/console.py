@@ -242,6 +242,10 @@ def handle_error_with_delay(error_line, error_action):
             logging.info("Critical crash detected - skipping state resume, going to reconnect")
             serverstate.RECOVERY_ATTEMPTS = 1  # Skip attempt 1, go to attempt 2
         
+        # Reset greeting state on errors so greeting is sent on successful reconnect
+        logging.info("Error detected - resetting greeting state for reconnection")
+        serverstate.LAST_GREETING_SERVER = None
+        
         logging.info("Starting smart recovery for error...")
         serverstate.smart_connection_recovery(f"Game error: {error_line}")
         
