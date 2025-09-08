@@ -1091,16 +1091,19 @@ def wait_log(start_ts=0, end_type=None, end_author=None, end_content=None, end_c
 SENT_MESSAGE_IDS = set()  # Add this at the top of console.py
 
 def check_websocket_health():
-    """Check if websocket connection is healthy and clear queue if not"""
+    """Check if websocket connection is healthy - log status only, don't clear messages"""
     global DELAYED_MESSAGE_QUEUE, WEBSOCKET_LAST_HEALTHY
     
     current_time = time.time()
-    # If websocket hasn't been healthy for more than 60 seconds, clear the queue
-    if current_time - WEBSOCKET_LAST_HEALTHY > 60:
+    websocket_unhealthy_duration = current_time - WEBSOCKET_LAST_HEALTHY
+    
+    # Log websocket health status but don't clear messages - let extension handle delivery
+    if websocket_unhealthy_duration > 60:
         if DELAYED_MESSAGE_QUEUE:
             queue_size = len(DELAYED_MESSAGE_QUEUE)
-            DELAYED_MESSAGE_QUEUE.clear()
-            logging.warning(f"Websocket unhealthy for >60s - cleared {queue_size} queued messages")
+            # Only log every 30 seconds to avoid spam
+            if int(websocket_unhealthy_duration) % 30 == 0:
+                logging.info(f"Websocket unhealthy for {int(websocket_unhealthy_duration)}s - {queue_size} messages queued for delivery")
 
 def update_websocket_health():
     """Update websocket health timestamp - called when websocket successfully sends"""

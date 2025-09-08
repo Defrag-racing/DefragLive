@@ -4,6 +4,7 @@ import websockets
 import logging
 import time
 import json
+import random
 
 import api
 import console
@@ -710,34 +711,50 @@ async def ws_start(q):
 
 # In websocket_console.py, modify the ws_worker function error handling:
 def ws_worker(q, loop):
+    reconnect_delay = 1  # Start with 1 second
+    max_delay = 30       # Max 30 seconds between attempts
+    consecutive_failures = 0
+    
     while True:
         try:
+            logging.info("Attempting websocket connection...")
             loop.run_until_complete(ws_start(q))
-        except Exception as e:
-            logging.info(f'\nWebsocket error: {str(e)}')
-            logging.info('Please check if the websocket server is running!\n')
+            # If we get here, connection was successful, reset counters
+            reconnect_delay = 1
+            consecutive_failures = 0
             
-            # Reset websocket health to trigger queue cleanup
-            try:
-                import console
-                console.WEBSOCKET_LAST_HEALTHY = 0  # Reset to trigger cleanup
-            except Exception:
-                pass  # Ignore import errors
+        except Exception as e:
+            consecutive_failures += 1
+            logging.warning(f'Websocket connection failed (attempt {consecutive_failures}): {str(e)}')
+            
+            # Don't reset WEBSOCKET_LAST_HEALTHY to 0 - let natural timeout handle it
+            # This prevents aggressive message clearing
             
             # Send error notification to extension
             try:
-                import console
-                import json
                 error_msg = {
                     'id': console.message_to_id(f"WS_ERROR_{time.time()}"),
                     'type': 'CONNECTION_ERROR',
                     'author': None,
-                    'content': f'Websocket connection error: {str(e)}',
+                    'content': f'Websocket connection failed: {str(e)} (attempt {consecutive_failures})',
                     'timestamp': time.time(),
                     'command': None
                 }
                 console.WS_Q.put(json.dumps({'action': 'message', 'message': error_msg}))
             except Exception as queue_error:
                 logging.error(f"Failed to send websocket error to extension: {queue_error}")
-        finally:
-            time.sleep(1)
+            
+            # Exponential backoff with jitter
+            if consecutive_failures <= 3:
+                # First few attempts: quick retry
+                delay = reconnect_delay
+            else:
+                # After multiple failures: exponential backoff
+                delay = min(max_delay, reconnect_delay * (2 ** min(consecutive_failures - 3, 4)))
+            
+            # Add small random jitter to prevent thundering herd
+            jitter = random.uniform(0.1, 0.3)
+            total_delay = delay + jitter
+            
+            logging.info(f'Retrying websocket connection in {total_delay:.1f} seconds...')
+            time.sleep(total_delay)
