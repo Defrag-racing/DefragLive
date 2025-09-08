@@ -717,6 +717,13 @@ def ws_worker(q, loop):
             logging.info(f'\nWebsocket error: {str(e)}')
             logging.info('Please check if the websocket server is running!\n')
             
+            # Reset websocket health to trigger queue cleanup
+            try:
+                import console
+                console.WEBSOCKET_LAST_HEALTHY = 0  # Reset to trigger cleanup
+            except Exception:
+                pass  # Ignore import errors
+            
             # Send error notification to extension
             try:
                 import console

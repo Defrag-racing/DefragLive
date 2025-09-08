@@ -31,6 +31,7 @@ PAUSE_STATE_START_TIME = None  # Add this global variable
 DELAYED_MESSAGE_QUEUE = []
 MAP_ERROR_COUNTDOWN_ACTIVE = False
 SENT_MESSAGE_IDS = set()
+WEBSOCKET_LAST_HEALTHY = time.time()  # Track websocket health
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -1089,11 +1090,31 @@ def wait_log(start_ts=0, end_type=None, end_author=None, end_content=None, end_c
 
 SENT_MESSAGE_IDS = set()  # Add this at the top of console.py
 
+def check_websocket_health():
+    """Check if websocket connection is healthy and clear queue if not"""
+    global DELAYED_MESSAGE_QUEUE, WEBSOCKET_LAST_HEALTHY
+    
+    current_time = time.time()
+    # If websocket hasn't been healthy for more than 60 seconds, clear the queue
+    if current_time - WEBSOCKET_LAST_HEALTHY > 60:
+        if DELAYED_MESSAGE_QUEUE:
+            queue_size = len(DELAYED_MESSAGE_QUEUE)
+            DELAYED_MESSAGE_QUEUE.clear()
+            logging.warning(f"Websocket unhealthy for >60s - cleared {queue_size} queued messages")
+
+def update_websocket_health():
+    """Update websocket health timestamp - called when websocket successfully sends"""
+    global WEBSOCKET_LAST_HEALTHY
+    WEBSOCKET_LAST_HEALTHY = time.time()
+
 def process_delayed_messages():
     """Background thread to process delayed messages"""
     global DELAYED_MESSAGE_QUEUE, SENT_MESSAGE_IDS
     
     while True:
+        # Check websocket health and clear stale messages
+        check_websocket_health()
+        
         current_time = time.time()
         messages_to_send = []
         remaining_messages = []
@@ -1114,11 +1135,13 @@ def process_delayed_messages():
         if len(SENT_MESSAGE_IDS) > 500:
             SENT_MESSAGE_IDS = set(list(SENT_MESSAGE_IDS)[-250:])
         
-        # Send ready messages (rest stays the same)
+        # Send ready messages and update health on successful sends
         for msg in messages_to_send:
             logging.info(f"Sending delayed message: {msg['type']} - {msg['content'][:50]}...")
             CONSOLE_DISPLAY.append(msg)
             WS_Q.put(json.dumps({'action': 'message', 'message': msg}))
+            # Update health timestamp when we successfully queue a message
+            update_websocket_health()
         
         DELAYED_MESSAGE_QUEUE = remaining_messages
         time.sleep(0.1)
