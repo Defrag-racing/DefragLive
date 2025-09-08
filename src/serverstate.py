@@ -49,6 +49,7 @@ RECOVERY_ATTEMPTS = 0
 MAX_RECOVERY_ATTEMPTS = 3
 LAST_RECOVERY_TIME = 0
 RECOVERY_COOLDOWN = 15  # 15 seconds between recovery attempts
+RECOVERY_TIMEOUT_ACTIVE = False  # Prevent multiple timeout threads
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -1146,6 +1147,10 @@ def smart_connection_recovery(reason="Unknown"):
     if is_critical_crash and current_time - LAST_RECOVERY_TIME < RECOVERY_COOLDOWN:
         logging.warning(f"Critical crash detected - bypassing recovery cooldown: {reason}")
     
+    # Determine recovery strategy based on crash type
+    is_access_violation = "ACCESS_VIOLATION" in reason
+    max_attempts = 6 if is_access_violation else MAX_RECOVERY_ATTEMPTS
+    
     RECOVERY_IN_PROGRESS = True
     LAST_RECOVERY_TIME = current_time
     RECOVERY_ATTEMPTS += 1
@@ -1154,6 +1159,8 @@ def smart_connection_recovery(reason="Unknown"):
     logging.error(f"RECOVERY START: Attempt #{RECOVERY_ATTEMPTS}, Reason: {reason}")
     logging.error(f"RECOVERY STATE: PAUSE={PAUSE_STATE}, CONNECTING={CONNECTING}, VID_RESTART={VID_RESTARTING}")
     logging.error(f"RECOVERY TIMING: Last={LAST_RECOVERY_TIME}, Current={current_time}")
+    if is_access_violation:
+        logging.error(f"ACCESS_VIOLATION detected - using extended recovery (max {max_attempts} attempts)")
     
     try:
         if RECOVERY_ATTEMPTS == 1:
@@ -1162,8 +1169,8 @@ def smart_connection_recovery(reason="Unknown"):
             if attempt_state_resume():
                 return  # Success, exit recovery
             
-        elif RECOVERY_ATTEMPTS in [2, 3, 4]:
-            # Attempts 2-4: Reconnect to same server (3 attempts)
+        elif RECOVERY_ATTEMPTS <= (5 if is_access_violation else 4):
+            # Attempts 2-5 for ACCESS_VIOLATION, 2-4 for other crashes: Reconnect to same server 
             logging.error(f"RECOVERY ATTEMPT {RECOVERY_ATTEMPTS}: Reconnecting to same server")
             if CURRENT_IP:
                 # Reset connection state - be more aggressive about cleanup
@@ -1182,9 +1189,9 @@ def smart_connection_recovery(reason="Unknown"):
                 smart_connection_recovery("No current IP for reconnect")
                 return
                 
-        elif RECOVERY_ATTEMPTS == 5:
-            # Fifth attempt: Try different server
-            logging.error("RECOVERY ATTEMPT 5: Trying different server")
+        elif RECOVERY_ATTEMPTS == (6 if is_access_violation else 5):
+            # Try different server (attempt 6 for ACCESS_VIOLATION, attempt 5 for others)
+            logging.error(f"RECOVERY ATTEMPT {RECOVERY_ATTEMPTS}: Trying different server")
             if CURRENT_IP:
                 IGNORE_IPS.append(CURRENT_IP)
             
@@ -1238,18 +1245,28 @@ def check_recovery_deadlock():
 
 def reset_recovery_state():
     """Reset recovery tracking variables"""
-    global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS
+    global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, RECOVERY_TIMEOUT_ACTIVE
     RECOVERY_IN_PROGRESS = False
     RECOVERY_ATTEMPTS = 0
+    RECOVERY_TIMEOUT_ACTIVE = False
     logging.info("Recovery state reset")
 
 def start_recovery_timeout():
     """Start a timeout for the current recovery attempt"""
+    global RECOVERY_TIMEOUT_ACTIVE
+    
+    # Prevent multiple timeout threads
+    if RECOVERY_TIMEOUT_ACTIVE:
+        logging.debug("Recovery timeout already active, skipping new timeout thread")
+        return
+        
+    RECOVERY_TIMEOUT_ACTIVE = True
+    
     def recovery_timeout_worker():
         import time
         time.sleep(60)  # Give each recovery attempt 60 seconds
         
-        global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, PAUSE_STATE, CONNECTING
+        global RECOVERY_IN_PROGRESS, RECOVERY_ATTEMPTS, PAUSE_STATE, CONNECTING, RECOVERY_TIMEOUT_ACTIVE
         
         if RECOVERY_IN_PROGRESS:
             logging.error(f"RECOVERY TIMEOUT: Attempt {RECOVERY_ATTEMPTS} stuck for 60s, forcing progression")
@@ -1279,7 +1296,7 @@ def start_recovery_timeout():
                         CONNECTION_START_TIME = time.time()
                         api.exec_command("reconnect", verbose=False)
                         start_connection_monitor()
-                        start_recovery_timeout()  # Start timeout for this attempt
+                        # DON'T call start_recovery_timeout() here - would create infinite timeout threads
                     else:
                         # Skip to next attempt
                         smart_connection_recovery("No current IP for reconnect")
@@ -1315,6 +1332,9 @@ def start_recovery_timeout():
                     import threading
                     standby_thread = threading.Thread(target=standby_mode_started, daemon=True)
                     standby_thread.start()
+        else:
+            # Recovery completed while we were waiting, clear timeout flag
+            RECOVERY_TIMEOUT_ACTIVE = False
     
     timeout_thread = threading.Thread(target=recovery_timeout_worker, daemon=True)
     timeout_thread.start()
