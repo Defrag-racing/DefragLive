@@ -94,10 +94,7 @@ SYSTEM_MESSAGE_PATTERNS = [
     "vertexes,",
     "indexes",
     "recording to demos/",  
-    "report written to system/reports/",
     "VM_LoadDLL",
-    "CL_InitCGame:",
-    "Com_TouchMemory:",
     "msec",
     "^2Cvar:",
     "test: okay"
@@ -340,8 +337,10 @@ def read(file_path: str):
                    handle_command(line_data)
                except Exception as e:
                    logging.info(f"Error occurred for in-game command {command}: {e}")
-            if ("report written to system/reports/" in line_data["content"]):
-               # Skip system messages entirely
+            if (("report written to system/reports/" in line_data["content"]) or
+                ("Com_TouchMemory:" in line_data["content"]) or
+                ("CL_InitCGame:" in line_data["content"])):
+               # Skip connection/system messages from extension
                pass
             elif line_data["type"] in ["PRINT", "SAY", "ANNOUNCE", "RENAME", "CONNECTED", 
                                       "DISCONNECTED", "ENTEREDGAME", "JOINEDSPEC", 

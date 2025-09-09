@@ -887,11 +887,15 @@ def validate_state():
 
             if STATE.idle_counter >= IDLE_TIMEOUT or spectating_afk:
                 # There's been no one on the server for a while or only afks. Switch servers.
+                # Send goodbye message first
+                api.exec_command("say ^1AFK/Nospec ^7on all available players has been detected. ^3Farewell.")
+                
+                # Wait 2 seconds before searching for new server and connecting
+                time.sleep(2)
+                
                 IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS and STATE.ip != "" else None
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 print("new_ip: " + str(new_ip))
-
-                api.exec_command("say ^1AFK/Nospec ^7on all available players has been detected. ^3Farewell.")
 
                 if bool(new_ip):
                     connect(new_ip)

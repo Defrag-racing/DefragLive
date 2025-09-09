@@ -23,6 +23,9 @@ async def connect(ctx, author, args):
 
     api.exec_command("say ^7Switching servers. ^3Farewell.")
 
+    # Wait 2 seconds before connecting to new server
+    time.sleep(2)
+
     serverstate.RECONNECTED_CHECK = True
 
     serverstate.connect(ip, author)
