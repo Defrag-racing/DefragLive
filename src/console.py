@@ -600,6 +600,8 @@ def process_line(line):
         if (line.startswith('Not recording a demo.') or 
             line.startswith("report written to system/reports/initialstate.txt") or
             line.startswith("Sound memory manager started") or
+            line.startswith("CL_InitCGame:") or
+            line.startswith("Com_TouchMemory:") or
             "GL_RENDERER:" in line or
             "MODE: -1," in line or
             # ADD THIS NEW CONDITION - detect when bot enters game during connection
