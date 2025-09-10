@@ -466,10 +466,12 @@ def handle_ws_command(msg):
             
             # MANUAL SPECTATE - Reset AFK state for the selected player
             if hasattr(serverstate, 'STATE') and serverstate.STATE:
+                was_afk = False
                 # Remove the selected player from AFK list if they were there
                 if int(id) in serverstate.STATE.afk_ids:
                     serverstate.STATE.afk_ids.remove(int(id))
                     logging.info(f"Removed player {id} from AFK list due to manual spectate")
+                    was_afk = True
                 
                 # Reset AFK counter since this is a manual override
                 serverstate.STATE.afk_counter = 0
@@ -478,11 +480,19 @@ def handle_ws_command(msg):
                 serverstate.IGNORE_IPS = []
                 
                 # Reset any custom AFK timeout for this player back to default
+                timeout_reset = False
                 if str(id) in serverstate.STATE.player_afk_timeouts:
                     del serverstate.STATE.player_afk_timeouts[str(id)]
                     logging.info(f"Reset AFK timeout for player {id} back to default (manual spectate)")
+                    timeout_reset = True
                     
-                logging.info(f"Manual spectate to {id}: AFK counter reset, player removed from AFK list")
+                # Log accurate summary of what was actually done
+                actions = ["AFK counter reset"]
+                if was_afk:
+                    actions.append("player removed from AFK list")
+                if timeout_reset:
+                    actions.append("timeout reset")
+                logging.info(f"Manual spectate to {id}: {', '.join(actions)}")
             
                 api.exec_command(f"follow {id}")
                 serverstate.STATE.current_player_id = int(id)  # Convert to int for consistency
