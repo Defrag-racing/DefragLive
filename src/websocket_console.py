@@ -487,12 +487,16 @@ def handle_ws_command(msg):
                     timeout_reset = True
                     
                 # Log accurate summary of what was actually done
-                actions = ["AFK counter reset"]
+                actions = []
                 if was_afk:
                     actions.append("player removed from AFK list")
                 if timeout_reset:
                     actions.append("timeout reset")
-                logging.info(f"Manual spectate to {id}: {', '.join(actions)}")
+                
+                if actions:
+                    logging.info(f"Manual spectate to {id}: {', '.join(actions)}")
+                else:
+                    logging.info(f"Manual spectate to {id}")
             
                 api.exec_command(f"follow {id}")
                 serverstate.STATE.current_player_id = int(id)  # Convert to int for consistency
