@@ -467,8 +467,8 @@ def handle_ws_command(msg):
             # MANUAL SPECTATE - Reset AFK state for the selected player
             if hasattr(serverstate, 'STATE') and serverstate.STATE:
                 # Remove the selected player from AFK list if they were there
-                if id in serverstate.STATE.afk_ids:
-                    serverstate.STATE.afk_ids.remove(id)
+                if int(id) in serverstate.STATE.afk_ids:
+                    serverstate.STATE.afk_ids.remove(int(id))
                     logging.info(f"Removed player {id} from AFK list due to manual spectate")
                 
                 # Reset AFK counter since this is a manual override
