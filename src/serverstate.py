@@ -820,9 +820,8 @@ def validate_state():
         try:
             STATE.spec_ids.remove(STATE.current_player_id)  # Remove afk player from list of spec-able players
             # Add them to the afk list
-            logging.info(f"DEBUG: Adding player {STATE.current_player_id} to AFK list. Current list: {STATE.afk_ids}")
             STATE.afk_ids.append(STATE.current_player_id) if STATE.current_player_id not in STATE.afk_ids else None
-            logging.info(f"DEBUG: After adding player {STATE.current_player_id}, AFK list is now: {STATE.afk_ids}")
+            logging.info(f"Added player {STATE.current_player_id} to AFK list")
             if not PAUSE_STATE:
                 logging.info("AFK. Switching...")
                 api.display_message("^3AFK detected. ^7Switching to the next player.", time=5)
@@ -980,13 +979,16 @@ def validate_state():
                         logging.error(f"Failed to send AFK help notification to Twitch: {e}")
                         
         else:
-            # Activity detected, reset AFK strike counter and empty AFK list + ip blacklist
+            # Activity detected, reset AFK strike counter for current player only
             if STATE.afk_counter >= 15:
                 api.display_message("Activity detected. ^3AFK counter aborted.")
                 logging.info("Activity detected. AFK counter aborted.")
 
             STATE.afk_counter = 0
-            STATE.afk_ids = []
+            # Only remove current player from AFK list, keep other AFK players
+            if STATE.current_player_id in STATE.afk_ids:
+                STATE.afk_ids.remove(STATE.current_player_id)
+                logging.info(f"Removed player {STATE.current_player_id} from AFK list")
             IGNORE_IPS = []
             # CANCEL ANY ACTIVE AFK COUNTDOWNS
             AFK_COUNTDOWN_ACTIVE = False
