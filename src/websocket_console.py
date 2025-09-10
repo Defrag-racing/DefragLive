@@ -467,6 +467,8 @@ def handle_ws_command(msg):
             # MANUAL SPECTATE - Reset AFK state for the selected player
             if hasattr(serverstate, 'STATE') and serverstate.STATE:
                 was_afk = False
+                # Debug: log current AFK list
+                logging.info(f"DEBUG: Current AFK list: {serverstate.STATE.afk_ids}, checking for player {id}")
                 # Remove the selected player from AFK list if they were there
                 if int(id) in serverstate.STATE.afk_ids:
                     serverstate.STATE.afk_ids.remove(int(id))
