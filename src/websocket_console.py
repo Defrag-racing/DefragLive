@@ -678,46 +678,86 @@ def on_ws_message(msg):
 
 
 async def ws_send_queue(websocket, q):
+    last_ping = time.time()
+    ping_interval = 30  # Send ping every 30 seconds
+    
     while True:
-        if not q.empty():
-            msg = q.get()
-            # logging.info('ws_send_queue msg: {}'.format(msg))
-            if msg == '>>quit<<':
-                await websocket.close(reason='KTHXBYE!')
+        try:
+            # Check if we need to send a keepalive ping
+            current_time = time.time()
+            if current_time - last_ping >= ping_interval:
+                try:
+                    pong_waiter = await websocket.ping()
+                    await asyncio.wait_for(pong_waiter, timeout=10)  # 10 second timeout for pong response
+                    last_ping = current_time
+                    console.update_websocket_health()
+                    logging.debug("Websocket keepalive ping successful")
+                except asyncio.TimeoutError:
+                    logging.error("Websocket keepalive pong timeout")
+                    raise websockets.exceptions.ConnectionClosedError(1011, "keepalive ping timeout")
+                except Exception as e:
+                    logging.error(f"Websocket keepalive ping failed: {e}")
+                    raise
+            
+            if not q.empty():
+                msg = q.get()
+                # logging.info('ws_send_queue msg: {}'.format(msg))
+                if msg == '>>quit<<':
+                    await websocket.close(reason='KTHXBYE!')
+                    break
+                else:
+                    await websocket.send(msg)
+                    console.update_websocket_health()
             else:
-                await websocket.send(msg)
-        else:
-            await asyncio.sleep(0)
+                await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+        except Exception as e:
+            logging.error(f"Error in ws_send_queue: {e}")
+            raise
 
 
 async def ws_receive(websocket):
-    async for msg in websocket:
-        # logging.info('ws_receive msg: {}'.format(msg))
-        on_ws_message(msg)
+    try:
+        async for msg in websocket:
+            # logging.info('ws_receive msg: {}'.format(msg))
+            on_ws_message(msg)
+            console.update_websocket_health()  # Update health when receiving messages
+    except websockets.exceptions.ConnectionClosed as e:
+        logging.error(f"Websocket connection closed: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error in ws_receive: {e}")
+        raise
 
 
 async def ws_start(q):
-    async with websockets.connect(config.WS_ADDRESS) as websocket:
-        # Identify this connection as the DefragLive bot
-        bot_id_message = {
-            'action': 'identify_bot'
-        }
-        await websocket.send(json.dumps(bot_id_message))
-        logging.info("[SETTINGS] Identified as DefragLive bot to VPS")
-        
-        # Sync current settings to VPS after connecting
-        sync_current_settings_to_vps()
-        
-        await asyncio.gather(
-            ws_receive(websocket),
-            ws_send_queue(websocket, q),
-        )
+    try:
+        async with websockets.connect(config.WS_ADDRESS, ping_interval=None) as websocket:
+            # Identify this connection as the DefragLive bot
+            bot_id_message = {
+                'action': 'identify_bot'
+            }
+            await websocket.send(json.dumps(bot_id_message))
+            logging.info("[SETTINGS] Identified as DefragLive bot to VPS")
+            
+            # Sync current settings to VPS after connecting
+            sync_current_settings_to_vps()
+            
+            await asyncio.gather(
+                ws_receive(websocket),
+                ws_send_queue(websocket, q),
+            )
+    except websockets.exceptions.ConnectionClosed as e:
+        logging.error(f"Websocket connection closed during startup: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error in ws_start: {e}")
+        raise
 
-# In websocket_console.py, modify the ws_worker function error handling:
 def ws_worker(q, loop):
     reconnect_delay = 1  # Start with 1 second
     max_delay = 30       # Max 30 seconds between attempts
     consecutive_failures = 0
+    connection_successful = False
     
     while True:
         try:
@@ -726,13 +766,20 @@ def ws_worker(q, loop):
             # If we get here, connection was successful, reset counters
             reconnect_delay = 1
             consecutive_failures = 0
+            connection_successful = True
+            console.update_websocket_health()  # Update health on successful connection
+            logging.info("Websocket connection established successfully")
             
         except Exception as e:
             consecutive_failures += 1
-            logging.warning(f'Websocket connection failed (attempt {consecutive_failures}): {str(e)}')
+            connection_successful = False
+            error_str = str(e)
             
-            # Don't reset WEBSOCKET_LAST_HEALTHY to 0 - let natural timeout handle it
-            # This prevents aggressive message clearing
+            # Special handling for keepalive ping timeouts
+            if "keepalive ping timeout" in error_str or "1011" in error_str:
+                logging.error(f'Websocket connection failed (attempt {consecutive_failures}): received 1011 (internal error) keepalive ping timeout; then sent 1011 (internal error) keepalive ping timeout')
+            else:
+                logging.warning(f'Websocket connection failed (attempt {consecutive_failures}): {error_str}')
             
             # Send error notification to extension
             try:
@@ -740,7 +787,7 @@ def ws_worker(q, loop):
                     'id': console.message_to_id(f"WS_ERROR_{time.time()}"),
                     'type': 'CONNECTION_ERROR',
                     'author': None,
-                    'content': f'Websocket connection failed: {str(e)} (attempt {consecutive_failures})',
+                    'content': f'Websocket connection failed: {error_str} (attempt {consecutive_failures})',
                     'timestamp': time.time(),
                     'command': None
                 }
