@@ -738,6 +738,7 @@ async def ws_start(q):
             }
             await websocket.send(json.dumps(bot_id_message))
             logging.info("[SETTINGS] Identified as DefragLive bot to VPS")
+            logging.info("Websocket connection established successfully")
             
             # Sync current settings to VPS after connecting
             sync_current_settings_to_vps()
