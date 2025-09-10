@@ -820,7 +820,9 @@ def validate_state():
         try:
             STATE.spec_ids.remove(STATE.current_player_id)  # Remove afk player from list of spec-able players
             # Add them to the afk list
+            logging.info(f"DEBUG: Adding player {STATE.current_player_id} to AFK list. Current list: {STATE.afk_ids}")
             STATE.afk_ids.append(STATE.current_player_id) if STATE.current_player_id not in STATE.afk_ids else None
+            logging.info(f"DEBUG: After adding player {STATE.current_player_id}, AFK list is now: {STATE.afk_ids}")
             if not PAUSE_STATE:
                 logging.info("AFK. Switching...")
                 api.display_message("^3AFK detected. ^7Switching to the next player.", time=5)
