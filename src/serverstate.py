@@ -616,7 +616,7 @@ def start():
                 logging.info(f"State failed: {e}")
                 print(traceback.format_exc())
                 logging.info(f"State failed: {e}")
-            time.sleep(1)
+            time.sleep(2)
 
 
 def initialize_state(force=False):
@@ -683,10 +683,10 @@ def initialize_state(force=False):
             if nospecid in STATE.nopmids:
                 # Send one-time message to nospecpm players
                 api.exec_command('tell ' + str(nospecid) + ' ^7nospec active, ^3defraglive ^7cant spectate.')
-                time.sleep(1)
+                time.sleep(2)
                 continue
             api.exec_command('tell ' + str(nospecid) + ' Detected nospec, to disable this feature write /color1 spec')
-            time.sleep(1)
+            time.sleep(2)
             api.exec_command('tell ' + str(nospecid) + ' To disable private notifications about nospec, set /color1 nospecpm')        
     except Exception as e:
         logging.error(f"State initialization failed: {e}")
@@ -808,6 +808,8 @@ def validate_state():
 
     # Current player spectated has turned on the no-spec system
     spectating_nospec = STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id
+    if spectating_nospec:
+        logging.info(f"DEBUG: spectating_nospec=True for player {STATE.current_player_id} - not in spec_ids: {STATE.spec_ids}")
 
     # Get the AFK timeout for current player (could be extended)
     current_afk_timeout = STATE.get_afk_timeout_for_player(STATE.current_player_id)
@@ -845,9 +847,13 @@ def validate_state():
 
             if spectating_nospec:
                 if not PAUSE_STATE and not spectating_self:
+                    # DEBUG: Log detailed information about why player is not specable
+                    logging.info(f"DEBUG: Player {STATE.current_player_id} not specable - spec_ids: {STATE.spec_ids}, afk_ids: {STATE.afk_ids}")
+                    
                     # Determine WHY player is not specable for better error message
                     target_player = STATE.get_player_by_id(STATE.current_player_id)
                     if target_player:
+                        logging.info(f"DEBUG: Target player {STATE.current_player_id} found - t: '{target_player.t}', c1: '{target_player.c1}', dfn: '{target_player.dfn}'")
                         if target_player.t == '3':  # Player is a spectator
                             logging.info('Free spectator detected. Switching...')
                             api.display_message("^7Can't spec free spectators. Switching.")
@@ -855,10 +861,12 @@ def validate_state():
                             logging.info('Nospec detected. Switching...')
                             api.display_message("^7Nospec detected. Switching.")
                         else:  # Other reason (shouldn't happen but fallback)
+                            logging.info(f'DEBUG: Player not specable for unknown reason - t: "{target_player.t}", c1: "{target_player.c1}", not in spec_ids')
                             logging.info('Player not specable. Switching...')
                             api.display_message("^7Player unavailable. Switching.")
                     else:
                         # Fallback if player object not found
+                        logging.info(f'DEBUG: Player {STATE.current_player_id} object not found in player list')
                         logging.info('Player not specable. Switching...')
                         api.display_message("^7Player unavailable. Switching.")
 

@@ -293,7 +293,7 @@ def read(file_path: str):
     global STOP_CONSOLE
 
     while not os.path.isfile(file_path):
-        time.sleep(1)
+        time.sleep(2)
 
     STOP_CONSOLE = False
 
@@ -614,7 +614,7 @@ def process_line(line):
             # PRIORITY ORDER: Check most specific conditions first
             if serverstate.VID_RESTARTING:
                 # VID_RESTART completion - HIGHEST PRIORITY
-                time.sleep(1)
+                time.sleep(2)
                 logging.info("vid_restart done.")
                 serverstate.PAUSE_STATE = False
                 serverstate.VID_RESTARTING = False
@@ -646,7 +646,7 @@ def process_line(line):
                 
             elif serverstate.CONNECTING:
                 # Connection completion - SECOND PRIORITY
-                time.sleep(1)
+                time.sleep(2)
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
                 serverstate.CONNECTION_START_TIME = None  # ADD THIS LINE
@@ -692,7 +692,21 @@ def process_line(line):
                 
             elif serverstate.PAUSE_STATE:
                 # Game restart completion - THIRD PRIORITY
-                time.sleep(1)
+                # Wait a bit longer to catch immediate crashes after CL_InitCGame
+                time.sleep(2)
+                
+                # Double-check for immediate crashes after CL_InitCGame
+                if any(crash_indicator in line for crash_indicator in [
+                    "ACCESS_VIOLATION", 
+                    "Exception Code:", 
+                    "Signal caught",
+                    "forcefully unloading cgame vm",
+                    "ERROR: Unhandled exception caught"
+                ]):
+                    logging.info("Immediate crash detected after CL_InitCGame - keeping pause state and triggering recovery")
+                    # Don't unpause, let the crash handler deal with it
+                    return
+                
                 serverstate.PAUSE_STATE = False
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()

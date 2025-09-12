@@ -88,7 +88,7 @@ def execute_settings_command(content):
         def delayed_writeconfig():
             import time
             global CANCEL_PENDING_WRITECONFIG
-            time.sleep(1)
+            time.sleep(2)
             # Check if writeconfig was cancelled
             if not CANCEL_PENDING_WRITECONFIG:
                 api.exec_command("writeconfig settings-current.cfg")
@@ -97,7 +97,7 @@ def execute_settings_command(content):
                 # Sync settings after writeconfig for regular commands
                 def delayed_settings_confirmation():
                     import time
-                    time.sleep(1)  # Wait for writeconfig to complete
+                    time.sleep(2)  # Wait for writeconfig to complete
                     try:
                         sync_current_settings_to_vps()
                         logging.info("[SETTINGS] Synced settings after regular command")
@@ -137,7 +137,7 @@ def process_queued_settings():
         import threading
         def delayed_queue_sync():
             import time
-            time.sleep(1)  # Wait for all commands to take effect
+            time.sleep(2)  # Wait for all commands to take effect
             try:
                 sync_current_settings_to_vps()
                 logging.info("[SETTINGS] Synced settings after processing queued commands")
@@ -458,7 +458,7 @@ def handle_ws_command(msg):
         if content['value'] == 'next':
             serverstate.switch_spec('next')
             api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3{author} ^7has switched to ^3 Next Player")
-            time.sleep(1)
+            time.sleep(2)
             return
         if 'id:' in content['value']:
             id = content['value'].split(':')[1]
@@ -673,7 +673,7 @@ def on_ws_message(msg):
                 
             logging.info("proxy command received")
             api.exec_command(message_text)
-            time.sleep(1)
+            time.sleep(2)
         else:
             # BLOCK CHAT MESSAGES DURING MAP LOADING
             if hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE:
