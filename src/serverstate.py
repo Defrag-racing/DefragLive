@@ -346,6 +346,26 @@ def get_twitch_viewer_count():
         logging.error(f"Error getting Twitch viewer count: {e}")
         return 0
 
+def check_twitch_channel_live(username):
+    """
+    Check if a Twitch channel is currently live
+    Returns True if live, False if not live or error occurs
+    """
+    try:
+        client_id = environ['TWITCH_API']['client_id']
+        client_secret = environ['TWITCH_API']['client_secret']
+        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
+        token_response = requests.post(token_url)
+        token = token_response.json()['access_token']
+        stream_url = f"https://api.twitch.tv/helix/streams?user_login={username}"
+        headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
+        response = requests.get(stream_url, headers=headers)
+        stream_data = response.json()['data']
+        return len(stream_data) > 0  # Live if stream data exists
+    except Exception as e:
+        logging.error(f"Error checking Twitch channel {username}: {e}")
+        return False
+
 
 def send_auto_greeting():
     logging.info(f"[GREETING DEBUG] send_auto_greeting called")

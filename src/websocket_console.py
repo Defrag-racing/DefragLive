@@ -339,18 +339,48 @@ def serverstate_to_json():
     }
 
     if serverstate.STATE.current_player is not None:
-        data['current_player'] = serverstate.STATE.current_player.__dict__
+        data['current_player'] = serverstate.STATE.current_player.__dict__.copy()
 
         if 'n' in data['current_player']:
             data['current_player']['n'] = filters.filter_author(data['current_player']['n'])
+            
+        # Check for Twitch channels in current player's c1 field and add live status
+        if 'c1' in data['current_player'] and data['current_player']['c1'] and 'twitch.tv/' in data['current_player']['c1']:
+            import re
+            # Extract username from twitch.tv/username format (handles both twitch.tv/ and nospec.twitch.tv/)
+            match = re.search(r'twitch\.tv/([^,\s]+)', data['current_player']['c1'])
+            if match:
+                username = match.group(1)
+                # Remove any existing ,live or ,not suffix
+                base_c1 = re.sub(r',(?:live|not)$', '', data['current_player']['c1'])
+                
+                # Check if channel is live
+                is_live = serverstate.check_twitch_channel_live(username)
+                suffix = ',live' if is_live else ',not'
+                data['current_player']['c1'] = base_c1 + suffix
     else:
         data['current_player'] = None  # ADD THIS LINE - explicitly set to None
 
     for pl in serverstate.STATE.players:
-        pl_dict = pl.__dict__
+        pl_dict = pl.__dict__.copy()  # Make a copy to avoid modifying original
 
         if 'n' in pl_dict:
             pl_dict['n'] = filters.filter_author(pl_dict['n'])
+
+        # Check for Twitch channels in c1 field and add live status
+        if 'c1' in pl_dict and pl_dict['c1'] and 'twitch.tv/' in pl_dict['c1']:
+            import re
+            # Extract username from twitch.tv/username format (handles both twitch.tv/ and nospec.twitch.tv/)
+            match = re.search(r'twitch\.tv/([^,\s]+)', pl_dict['c1'])
+            if match:
+                username = match.group(1)
+                # Remove any existing ,live or ,not suffix
+                base_c1 = re.sub(r',(?:live|not)$', '', pl_dict['c1'])
+                
+                # Check if channel is live
+                is_live = serverstate.check_twitch_channel_live(username)
+                suffix = ',live' if is_live else ',not'
+                pl_dict['c1'] = base_c1 + suffix
 
         data['players'][pl_dict['id']] = pl_dict
 
