@@ -30,7 +30,7 @@ import time
 
 # Configurable variables, Strike = 2seconds
 MESSAGE_REPEATS = 1  # How many times to spam info messages. 0 for no messages.
-AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 40  # Switch after afk detected x consecutive times.
+AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 30  # Switch after afk detected x consecutive times.
 #AFK_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Switch after afk detected x consecutive times.
 IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
@@ -504,12 +504,16 @@ class State:
         # remove afk players from speccable id list
         [self.spec_ids.remove(afk_id) for afk_id in self.afk_ids if afk_id in self.spec_ids]
 
-        # DEBUG: Add comprehensive spectating availability logging
-        logging.info(f"SPECTATE DEBUG: Spectatable players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.spec_ids]}")
-        logging.info(f"SPECTATE DEBUG: NoSpec players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid, self.get_player_by_id(pid).c1 if self.get_player_by_id(pid) else 'Unknown') for pid in self.nospec_ids]}")
-        logging.info(f"SPECTATE DEBUG: AFK players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.afk_ids]}")
-        logging.info(f"SPECTATE DEBUG: Free spectators (team 3): {[(p.n, p.id) for p in self.players if p.t == '3']}")
-        logging.info(f"SPECTATE DEBUG: Current spectating: {self.current_player.n if self.current_player else 'None'} (ID: {self.current_player_id})")
+        # DEBUG: Only log spectating info when there are issues or significant changes
+        if (len(self.spec_ids) == 0 or  # No spectatable players
+            len(self.nospec_ids) > 0 or  # NoSpec players present
+            len(self.afk_ids) > 0 or     # AFK players present
+            self.current_player_id == self.bot_id):  # Currently spectating bot (problematic)
+            logging.info(f"SPECTATE DEBUG: Spectatable players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.spec_ids]}")
+            logging.info(f"SPECTATE DEBUG: NoSpec players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid, self.get_player_by_id(pid).c1 if self.get_player_by_id(pid) else 'Unknown') for pid in self.nospec_ids]}")
+            logging.info(f"SPECTATE DEBUG: AFK players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.afk_ids]}")
+            logging.info(f"SPECTATE DEBUG: Free spectators (team 3): {[(p.n, p.id) for p in self.players if p.t == '3']}")
+            logging.info(f"SPECTATE DEBUG: Current spectating: {self.current_player.n if self.current_player else 'None'} (ID: {self.current_player_id})")
 
     def get_player_by_id(self, c_id):
         """Helper function for easily retrieving a player object from a client id number"""
