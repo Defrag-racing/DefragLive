@@ -293,6 +293,10 @@ WORLD_RECORD_MESSAGES = [
 LAST_WR_MESSAGE_TIME = 0
 WR_MESSAGE_COOLDOWN = 60  # 1 minute
 
+# Twitch account validation cache
+TWITCH_ACCOUNT_CACHE = {}  # username -> (exists, timestamp)
+TWITCH_CACHE_EXPIRY = 300  # 5 minutes cache expiry
+
 RECONNECTED_CHECK = False
 
 CURRENT_IP = None
@@ -345,6 +349,42 @@ def get_twitch_viewer_count():
     except Exception as e:
         logging.error(f"Error getting Twitch viewer count: {e}")
         return 0
+
+def check_twitch_account_exists(username):
+    """
+    Check if a Twitch account exists with caching to avoid excessive API calls
+    Returns True if account exists, False if not found or error occurs
+    """
+    global TWITCH_ACCOUNT_CACHE
+    current_time = time.time()
+
+    # Check cache first
+    if username in TWITCH_ACCOUNT_CACHE:
+        exists, timestamp = TWITCH_ACCOUNT_CACHE[username]
+        if current_time - timestamp < TWITCH_CACHE_EXPIRY:
+            return exists
+
+    try:
+        client_id = environ['TWITCH_API']['client_id']
+        client_secret = environ['TWITCH_API']['client_secret']
+        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
+        token_response = requests.post(token_url)
+        token = token_response.json()['access_token']
+        user_url = f"https://api.twitch.tv/helix/users?login={username}"
+        headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
+        response = requests.get(user_url, headers=headers)
+        user_data = response.json()['data']
+        exists = len(user_data) > 0  # Account exists if user data returned
+
+        # Cache the result
+        TWITCH_ACCOUNT_CACHE[username] = (exists, current_time)
+
+        return exists
+    except Exception as e:
+        logging.error(f"Error checking Twitch account existence {username}: {e}")
+        # Cache negative result for failed API calls to avoid spam
+        TWITCH_ACCOUNT_CACHE[username] = (False, current_time)
+        return False
 
 def check_twitch_channel_live(username):
     """
@@ -449,6 +489,12 @@ class State:
             # Convert player IDs to int for proper comparison
             player_ids = [int(p.id) for p in self.players]
             if self.current_player_id not in player_ids:
+                # DEBUG: Add comprehensive logging for player reset
+                logging.info(f"RESET DEBUG: Current player ID {self.current_player_id} not found in player list")
+                logging.info(f"RESET DEBUG: Available player IDs: {player_ids}")
+                logging.info(f"RESET DEBUG: All players: {[(p.id, p.n, p.t, p.c1) for p in self.players]}")
+                logging.info(f"RESET DEBUG: Bot ID: {self.bot_id}")
+
                 self.current_player_id = self.bot_id
                 logging.info(f"Reset current_player_id to bot_id due to invalid player")
         
@@ -457,6 +503,13 @@ class State:
             self.spec_ids.remove(self.bot_id)
         # remove afk players from speccable id list
         [self.spec_ids.remove(afk_id) for afk_id in self.afk_ids if afk_id in self.spec_ids]
+
+        # DEBUG: Add comprehensive spectating availability logging
+        logging.info(f"SPECTATE DEBUG: Spectatable players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.spec_ids]}")
+        logging.info(f"SPECTATE DEBUG: NoSpec players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid, self.get_player_by_id(pid).c1 if self.get_player_by_id(pid) else 'Unknown') for pid in self.nospec_ids]}")
+        logging.info(f"SPECTATE DEBUG: AFK players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.afk_ids]}")
+        logging.info(f"SPECTATE DEBUG: Free spectators (team 3): {[(p.n, p.id) for p in self.players if p.t == '3']}")
+        logging.info(f"SPECTATE DEBUG: Current spectating: {self.current_player.n if self.current_player else 'None'} (ID: {self.current_player_id})")
 
     def get_player_by_id(self, c_id):
         """Helper function for easily retrieving a player object from a client id number"""
@@ -924,6 +977,16 @@ def validate_state():
                 STATE.current_player_id = STATE.bot_id
             else:  # Was already spectating self. This is an idle strike
                 STATE.idle_counter += 1
+
+                # DEBUG: Add comprehensive logging for why we're not spectating anyone
+                logging.info(f"IDLE DEBUG: No spectatable players found - reason analysis:")
+                logging.info(f"IDLE DEBUG: Total players on server: {len(STATE.players)}")
+                logging.info(f"IDLE DEBUG: Spectatable players: {[(STATE.get_player_by_id(pid).n if STATE.get_player_by_id(pid) else 'Unknown', pid) for pid in STATE.spec_ids]}")
+                logging.info(f"IDLE DEBUG: NoSpec players: {[(STATE.get_player_by_id(pid).n if STATE.get_player_by_id(pid) else 'Unknown', pid) for pid in STATE.nospec_ids]}")
+                logging.info(f"IDLE DEBUG: AFK players: {[(STATE.get_player_by_id(pid).n if STATE.get_player_by_id(pid) else 'Unknown', pid) for pid in STATE.afk_ids]}")
+                logging.info(f"IDLE DEBUG: Free spectators: {[(p.n, p.id) for p in STATE.players if p.t == '3']}")
+                logging.info(f"IDLE DEBUG: Bot ID: {STATE.bot_id}, Current player ID: {STATE.current_player_id}")
+
                 logging.info(f"Not spectating. Strike {STATE.idle_counter}/{IDLE_TIMEOUT}")
                 if not PAUSE_STATE:
                     api.display_message(f"^3Strike {STATE.idle_counter}/{IDLE_TIMEOUT}", time=1)

@@ -353,11 +353,15 @@ def serverstate_to_json():
                 username = match.group(1)
                 # Remove any existing ,live or ,not suffix
                 base_c1 = re.sub(r',(?:live|not)$', '', data['current_player']['c1'])
-                
-                # Check if channel is live
-                is_live = serverstate.check_twitch_channel_live(username)
-                suffix = ',live' if is_live else ',not'
-                data['current_player']['c1'] = base_c1 + suffix
+
+                # First check if the Twitch account exists
+                if not serverstate.check_twitch_account_exists(username):
+                    data['current_player']['c1'] = 'invalid-twitch-account'
+                else:
+                    # Check if channel is live
+                    is_live = serverstate.check_twitch_channel_live(username)
+                    suffix = ',live' if is_live else ',not'
+                    data['current_player']['c1'] = base_c1 + suffix
     else:
         data['current_player'] = None  # ADD THIS LINE - explicitly set to None
 
@@ -376,11 +380,15 @@ def serverstate_to_json():
                 username = match.group(1)
                 # Remove any existing ,live or ,not suffix
                 base_c1 = re.sub(r',(?:live|not)$', '', pl_dict['c1'])
-                
-                # Check if channel is live
-                is_live = serverstate.check_twitch_channel_live(username)
-                suffix = ',live' if is_live else ',not'
-                pl_dict['c1'] = base_c1 + suffix
+
+                # First check if the Twitch account exists
+                if not serverstate.check_twitch_account_exists(username):
+                    pl_dict['c1'] = 'invalid-twitch-account'
+                else:
+                    # Check if channel is live
+                    is_live = serverstate.check_twitch_channel_live(username)
+                    suffix = ',live' if is_live else ',not'
+                    pl_dict['c1'] = base_c1 + suffix
 
         data['players'][pl_dict['id']] = pl_dict
 
