@@ -1024,8 +1024,8 @@ def validate_state():
             # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
             
-            # Show notifications every 10 strikes starting from strike 15, but use custom timeout
-            if STATE.afk_counter >= 15 and STATE.afk_counter % 10 == 5:  # Every 10 strikes after 15: 15, 25, 35...
+            # Show notifications starting from strike 10, then every 5 strikes: 10, 15, 20, 25, 30...
+            if STATE.afk_counter >= 10 and (STATE.afk_counter - 10) % 5 == 0:  # Every 5 strikes after 10: 10, 15, 20, 25, 30...
                 remaining_time = (current_afk_timeout - STATE.afk_counter) * 2
                 if remaining_time > 0:
                     logging.info(f"AFK detected. Strike {STATE.afk_counter}/{current_afk_timeout}")
@@ -1046,46 +1046,6 @@ def validate_state():
                     except Exception as e:
                         logging.error(f"Failed to send AFK notification to Twitch: {e}")
             
-            # Show help notification every 10 strikes starting from strike 20 (in between main notifications)
-            elif STATE.afk_counter >= 20 and STATE.afk_counter % 10 == 0:  # Every 10 strikes at 20, 30, 40...
-                remaining_time = (current_afk_timeout - STATE.afk_counter) * 2
-                if remaining_time > 0:
-                    AFK_COUNTDOWN_ACTIVE = True  # ADD THIS LINE
-                    logging.info(f"AFK help notification. Strike {STATE.afk_counter}/{current_afk_timeout}")
-                    
-                    # Send first help message to in-game - BUT CHECK IF CONNECTING
-                    if not PAUSE_STATE and not CONNECTING:
-                        api.display_message(f"Use ^3?afk reset ^7to restart afk counter", time=2)
-                    
-                    # Send second help message after 3 seconds - WITH CANCELLATION CHECK
-                    def send_second_help():
-                        import time
-                        time.sleep(3)
-                        # CHECK IF COUNTDOWN IS STILL ACTIVE BEFORE SENDING MESSAGE
-                        if AFK_COUNTDOWN_ACTIVE and not PAUSE_STATE and not CONNECTING:
-                            api.display_message(f"Use ^3?afk extend ^7to extend by 5min", time=2)
-                        else:
-                            logging.info("AFK help message cancelled due to server connection/pause")
-                    
-                    import threading
-                    help_thread = threading.Thread(target=send_second_help)
-                    help_thread.daemon = True
-                    help_thread.start()
-                    
-                    # Track the thread so we can manage it
-                    AFK_HELP_THREADS.append(help_thread)
-                    
-                    # Also send help to Twitch chat
-                    try:
-                        import console
-                        import json
-                        help_msg = {
-                            'action': 'afk_help',
-                            'message': f"AFK Strike {STATE.afk_counter}/{current_afk_timeout} - Use ?afk reset to restart or ?afk extend for +5min"
-                        }
-                        console.WS_Q.put(json.dumps(help_msg))
-                    except Exception as e:
-                        logging.error(f"Failed to send AFK help notification to Twitch: {e}")
                         
         else:
             # Activity detected, reset AFK strike counter for current player only
