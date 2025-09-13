@@ -717,14 +717,14 @@ def initialize_state(force=False):
 def standby_mode_started():
     global RECONNECTED_CHECK
     logging.info("[Note] Goin on standby mode.")
-    
+
     # Reset to bot when entering standby - but wait for new state to be initialized
     # Reset to bot when entering standby
     if STATE:
         STATE.current_player_id = STATE.bot_id
         STATE.current_player = None  # Will be updated when new state loads
         logging.info("Reset current_player_id to bot_id for standby mode")
-        
+
         # Notify websocket clients about the state change
         try:
             from websocket_console import notify_serverstate_change
@@ -736,6 +736,9 @@ def standby_mode_started():
     STANDBY_START_T = time.time()
     ignore_finish_standbymode = False
     msg_switch_t = 3  # time in seconds to switch between the two standby messages
+    last_serverstate_refresh = time.time()
+    serverstate_refresh_interval = 10  # Refresh serverstate every 10 seconds during standby
+
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         if RECONNECTED_CHECK:
             ignore_finish_standbymode = True
@@ -750,6 +753,17 @@ def standby_mode_started():
         api.exec_command(f"cg_centertime 2;displaymessage 140 10 Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
         time.sleep(msg_switch_t)
+
+        # Refresh serverstate periodically during standby mode
+        current_time = time.time()
+        if current_time - last_serverstate_refresh >= serverstate_refresh_interval:
+            try:
+                from websocket_console import notify_serverstate_change
+                notify_serverstate_change()
+                last_serverstate_refresh = current_time
+                logging.debug("Refreshed serverstate during standby mode")
+            except Exception as e:
+                logging.error(f"Failed to refresh serverstate during standby: {e}")
 
     if not ignore_finish_standbymode:
         standby_mode_finished()
