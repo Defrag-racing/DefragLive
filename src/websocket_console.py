@@ -657,6 +657,58 @@ def remove_color_codes(text):
     import re
     return re.sub(r'\^.', '', text)
 
+def fix_empty_author_message(message_data):
+    """Fix SAY messages with empty authors by parsing content"""
+    if (message_data.get('action') == 'message' and
+        message_data.get('message', {}).get('type') == 'SAY' and
+        message_data.get('message', {}).get('author') == '' and
+        ': ' in message_data.get('message', {}).get('content', '')):
+
+        content = message_data['message']['content']
+
+        # Look for ": " (colon + space) pattern which indicates chat format
+        # This handles cases where nicknames contain colons but chat format is "nick: message"
+        colon_space_pos = content.find(': ')
+
+        if colon_space_pos > 0:
+            potential_author = content[:colon_space_pos].strip()
+            potential_message = content[colon_space_pos + 2:].strip()
+
+            # Enhanced validation:
+            # - Author shouldn't be too long or contain weird chars
+            # - Should have actual message content after the colon
+            # - If potential author has colons, spaces are allowed BUT limited to 2 words max
+            # - If no colons in author, no spaces allowed (simple nicknames)
+            # - Message should start with color code (typical for Quake chat)
+            author_has_colons = ':' in potential_author
+            author_has_spaces = ' ' in potential_author
+
+            # Basic validation first
+            if (len(potential_author) <= 32 and
+                len(potential_message) > 0 and
+                not any(char in potential_author for char in ['\n', '\r', '\t']) and
+                (potential_message.startswith('^') or len(potential_message) > 1)):  # Color code or meaningful content
+
+                # Always extract author, but apply truncation rules
+                final_author = potential_author
+
+                if author_has_spaces:
+                    colon_count_in_author = potential_author.count(':')
+
+                    if colon_count_in_author > 1:
+                        # Multiple colons + spaces: limit to max 2 words
+                        words = potential_author.split()
+                        if len(words) > 2:
+                            final_author = ' '.join(words[:2])
+                            logging.info(f"Truncated long author from '{potential_author}' to '{final_author}'")
+                    # If only 1 colon + spaces: keep whole thing as author
+
+                message_data['message']['author'] = final_author
+                message_data['message']['content'] = potential_message
+                # Update the message ID to reflect the parsed author
+                message_data['message']['id'] = console.message_to_id(f"SAY_{final_author}_{potential_message}")
+                logging.info(f"Fixed empty author message: author='{final_author}', content='{potential_message}'")
+
 def on_ws_message(msg):
     message = {}
 
@@ -668,6 +720,9 @@ def on_ws_message(msg):
     except Exception as e:
         logging.info('ERROR [on_ws_message]:', e)
         return
+
+    # Fix empty author messages before any other processing
+    fix_empty_author_message(message)
 
     # Handle settings commands from VPS (BEFORE origin check)
     if message.get('action') == 'execute_command':

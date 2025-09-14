@@ -774,17 +774,55 @@ def process_line(line):
             # CHAT MESSAGE (BY PLAYER) - Improved pattern to handle color codes in names
             chat_message_r = r"^(.*?):\s*\^(\d)(.*)$"
             match = re.match(chat_message_r, command)
-            
+
             if not match:
+                # If we have a SAY message with empty author from WebSocket bridge,
+                # try to extract author from content that follows "playername: message" format
+                if line_data.get("type") == "SAY" and line_data.get("author") == "" and ": " in command:
+                    # Try to parse playername: message format - look for ": " (colon + space)
+                    colon_space_pos = command.find(": ")
+                    if colon_space_pos > 0:
+                        potential_author = command[:colon_space_pos].strip()
+                        potential_message = command[colon_space_pos + 2:].strip()
+
+                        # Enhanced validation
+                        author_has_colons = ':' in potential_author
+                        author_has_spaces = ' ' in potential_author
+
+                        # Basic validation first
+                        if (len(potential_author) <= 32 and
+                            len(potential_message) > 0 and
+                            not any(char in potential_author for char in ['\n', '\r', '\t']) and
+                            (potential_message.startswith('^') or len(potential_message) > 1)):
+
+                            # Always extract author, but apply truncation rules
+                            final_author = potential_author
+
+                            if author_has_spaces:
+                                colon_count_in_author = potential_author.count(':')
+
+                                if colon_count_in_author > 1:
+                                    # Multiple colons + spaces: limit to max 2 words
+                                    words = potential_author.split()
+                                    if len(words) > 2:
+                                        final_author = ' '.join(words[:2])
+                                # If only 1 colon + spaces: keep whole thing as author
+
+                            line_data["author"] = final_author
+                            line_data["content"] = potential_message
+                            line_data["id"] = message_to_id(f"SAY_{final_author}_{potential_message}")
+                            line_data["command"] = cmd.scan_for_command(potential_message)
+                            return  # Successfully parsed
+
                 raise Exception()
-            
+
             chat_name = match.group(1).strip()  # Remove any trailing spaces
             chat_message = match.group(3)       # The actual message content
-            
+
             # Remove trailing color codes from the name (like ^7 at the end)
             # This handles cases where names have color codes attached: "^3Player^7"
             chat_name = re.sub(r'\^[0-9a-zA-Z]+$', '', chat_name)
-            
+
             # FILTER OUT BOT'S OWN TELL RESPONSES
             if "DefragLive" in chat_name or "LIVE" in chat_name:
                 if any(phrase in chat_message for phrase in [
@@ -795,7 +833,7 @@ def process_line(line):
                 ]):
                     # Don't process as a regular chat message
                     raise Exception()  # This will skip this parsing function
-            
+
             line_data["id"] = message_to_id(f"SAY_{chat_name}_{chat_message}")
             line_data["type"] = "SAY"
             line_data["author"] = chat_name
