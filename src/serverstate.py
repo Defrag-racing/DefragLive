@@ -753,8 +753,12 @@ def initialize_state(force=False):
         STATE.num_players = num_players
         STATE_INITIALIZED = True
         logging.info("State Initialized.")
+
+        # Force bot to spectator mode to prevent joining as player
+        api.exec_command("team s")
+        logging.info("Bot forced to spectator mode after initialization")
         time.sleep(3)
-        
+
         # Handle nospec notifications
         for nospecid in STATE.nospec_ids:
             if nospecid in STATE.nopmids:
