@@ -18,6 +18,7 @@ from datetime import datetime
 import sys
 import twitch_commands
 import filters
+import psutil
 
 # Write PID to file at startup
 with open("bot_pid.txt", "w") as f:
@@ -257,16 +258,51 @@ if __name__ == "__main__":
     bot_thread.start()
 
     def add_periodic_health_check():
+        last_api_success = time.time()
+
         def health_check_worker():
+            nonlocal last_api_success
             while True:
                 time.sleep(30)  # Check every 30 seconds
-                
+
                 current_time = time.time()
-                
+
+                # Check if API calls are working (game is responsive)
+                try:
+                    api.api_init()
+                    last_api_success = current_time
+                except Exception:
+                    # If API fails for more than 2 minutes, kill the game process
+                    if current_time - last_api_success > 120:
+                        logging.critical("=" * 60)
+                        logging.critical("HEALTH CHECK: GAME PROCESS KILL TRIGGERED")
+                        logging.critical(f"Game has been unresponsive for {current_time - last_api_success:.0f} seconds")
+                        logging.critical(f"Last successful API call: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_api_success))}")
+                        logging.critical(f"Current time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time))}")
+                        try:
+                            killed_processes = []
+                            # Find and kill defrag processes
+                            for proc in psutil.process_iter(['pid', 'name']):
+                                if any(name in proc.info['name'].lower() for name in ['defrag', 'quake', 'iodfe', 'ioq3']):
+                                    killed_processes.append(f"{proc.info['name']} (PID: {proc.info['pid']})")
+                                    logging.critical(f"HEALTH CHECK: Killing unresponsive game process {proc.info['name']} (PID: {proc.info['pid']})")
+                                    proc.kill()
+
+                            if killed_processes:
+                                logging.critical(f"HEALTH CHECK: Successfully killed {len(killed_processes)} process(es): {', '.join(killed_processes)}")
+                            else:
+                                logging.critical("HEALTH CHECK: No matching game processes found to kill")
+
+                        except Exception as e:
+                            logging.critical(f"HEALTH CHECK: Failed to kill game process: {e}")
+                        finally:
+                            logging.critical("HEALTH CHECK: Process kill attempt completed")
+                            logging.critical("=" * 60)
+
                 # Check for recovery deadlock
                 if (hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS and
                     hasattr(serverstate, 'LAST_RECOVERY_TIME') and serverstate.LAST_RECOVERY_TIME):
-                    
+
                     recovery_stuck_time = current_time - serverstate.LAST_RECOVERY_TIME
                     if recovery_stuck_time > 100:  # 100 seconds
                         logging.critical(f"HEALTH CHECK: Recovery deadlock detected ({recovery_stuck_time:.0f}s)")
@@ -277,11 +313,11 @@ if __name__ == "__main__":
                             logging.critical("HEALTH CHECK: Forced emergency reset")
                         except Exception as e:
                             logging.critical(f"HEALTH CHECK: Emergency reset failed: {e}")
-                
+
                 # Check for general pause deadlock
                 if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
                     hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
-                    
+
                     pause_stuck_time = current_time - console.PAUSE_STATE_START_TIME
                     if pause_stuck_time > 120:  # 2 minutes
                         logging.critical(f"HEALTH CHECK: Pause deadlock detected ({pause_stuck_time:.0f}s)")
@@ -291,10 +327,10 @@ if __name__ == "__main__":
                             logging.critical("HEALTH CHECK: Forced pause reset")
                         except Exception as e:
                             logging.critical(f"HEALTH CHECK: Pause reset failed: {e}")
-        
+
         health_thread = threading.Thread(target=health_check_worker, daemon=True)
         health_thread.start()
-        logging.info("Enhanced deadlock detection health check started")
+        logging.info("Enhanced deadlock detection and game responsiveness health check started")
 
     # Call it once:
     add_periodic_health_check()
