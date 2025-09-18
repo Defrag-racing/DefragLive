@@ -755,9 +755,28 @@ def initialize_state(force=False):
         logging.info("State Initialized.")
 
         # Force bot to spectator mode to prevent joining as player
+        logging.info(f"TEAM DEBUG: Bot current team before 'team s': {STATE.get_player_by_id(bot_id).t if STATE.get_player_by_id(bot_id) else 'Unknown'}")
         api.exec_command("team s")
         logging.info("Bot forced to spectator mode after initialization")
         time.sleep(3)
+
+        # Check if team switch was successful
+        # Refresh state to get updated team info
+        api.exec_command("svinfo_report serverstate.txt", verbose=False)
+        time.sleep(1)
+        if new_report_exists(config.STATE_REPORT_P):
+            _, updated_players, _ = get_svinfo_report(config.STATE_REPORT_P)
+            updated_bot = [player for player in updated_players if player.id == bot_id]
+            if updated_bot:
+                logging.info(f"TEAM DEBUG: Bot team after 'team s': {updated_bot[0].t}")
+                if updated_bot[0].t != '3':
+                    logging.warning(f"TEAM DEBUG: 'team s' failed! Bot still on team {updated_bot[0].t}, retrying...")
+                    api.exec_command("team s")
+                    time.sleep(2)
+                else:
+                    logging.info("TEAM DEBUG: Bot successfully switched to spectator mode (team 3)")
+            else:
+                logging.warning("TEAM DEBUG: Could not find bot in updated player list after team switch")
 
         # Handle nospec notifications
         for nospecid in STATE.nospec_ids:
@@ -912,6 +931,10 @@ def validate_state():
     # The player that we are spectating has been AFK for their custom limit
     spectating_afk = STATE.afk_counter >= current_afk_timeout
 
+    # DEBUG: Log the key conditions for switching logic
+    logging.info(f"SWITCH DEBUG: Conditions - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
+    logging.info(f"SWITCH DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, afk_counter={STATE.afk_counter}/{current_afk_timeout}")
+
     # AFK player pre-processing
     if spectating_afk:
         try:
@@ -932,7 +955,10 @@ def validate_state():
 
     # Next player choice logic
     if spectating_self or spectating_nospec or spectating_afk:
+        logging.info(f"SWITCH DEBUG: Triggering player switch - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
+        logging.info(f"SWITCH DEBUG: Available spec_ids: {STATE.spec_ids}")
         follow_id = random.choice(STATE.spec_ids) if STATE.spec_ids != [] else STATE.bot_id  # Find someone else to spec
+        logging.info(f"SWITCH DEBUG: Selected follow_id: {follow_id}")
 
         if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
             # Reset timeout for old player back to default when switching to different player
@@ -966,12 +992,13 @@ def validate_state():
                         api.display_message("^7Player unavailable. Switching.")
 
             display_player_name(follow_id)
+            logging.info(f"SWITCH DEBUG: Executing 'follow {follow_id}' command")
             api.exec_command(f"follow {follow_id}")
             STATE.current_player_id = int(follow_id)
             STATE.current_player = STATE.get_player_by_id(int(follow_id))
             STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
             STATE.afk_counter = 0
-            logging.info(f"Successfully switched to player {follow_id}")
+            logging.info(f"SWITCH DEBUG: Successfully switched to player {follow_id} ({STATE.current_player.n if STATE.current_player else 'Unknown'})")
             return  # CRITICAL: Exit validation after successful switch
 
         else:  # Only found ourselves to spec.
@@ -1826,27 +1853,42 @@ def check_bot_team_status():
     # Get bot player object
     bot_player = STATE.get_player_by_id(STATE.bot_id)
     if not bot_player:
-        logging.warning("Bot player not found during team check")
+        logging.warning("TEAM DEBUG: Bot player not found during team check")
         return
-    
+
+    # Log current team status for debugging
+    logging.info(f"TEAM DEBUG: Periodic check - Bot team: {bot_player.t}, Expected: 3 (spectator)")
+
     # Check if bot is in player mode when it should be spectating
     if bot_player.t != '3':  # '3' means spectator, anything else is player mode
-        logging.warning(f"Bot detected in player mode (team={bot_player.t}) instead of spectator mode")
-        logging.info("Forcing bot back to spectator mode...")
-        
+        logging.warning(f"TEAM DEBUG: Bot detected in player mode (team={bot_player.t}) instead of spectator mode")
+        logging.info("TEAM DEBUG: Forcing bot back to spectator mode...")
+
         # Force switch to spectator mode
         api.exec_command("team s")
-        
+
         # Reset relevant counters since we're fixing a stuck state
         STATE.idle_counter = 0
         STATE.afk_counter = 0
-        
+
         # Clear ignore IPs since this might help find active servers
         global IGNORE_IPS
         IGNORE_IPS = []
-        
-        logging.info("Bot forced back to spectator mode due to periodic check")
-        
-        # If we're alone on server after switching to spec, trigger server switching logic
+
+        logging.info("TEAM DEBUG: Bot forced back to spectator mode due to periodic check")
+
+        # Verify the team switch worked
+        time.sleep(2)
+        api.exec_command("svinfo_report serverstate.txt", verbose=False)
+        time.sleep(1)
+        if new_report_exists(config.STATE_REPORT_P):
+            _, updated_players, _ = get_svinfo_report(config.STATE_REPORT_P)
+            updated_bot = [player for player in updated_players if player.id == STATE.bot_id]
+            if updated_bot:
+                logging.info(f"TEAM DEBUG: After retry - Bot team: {updated_bot[0].t}")
+                if updated_bot[0].t != '3':
+                    logging.error(f"TEAM DEBUG: CRITICAL - Bot still on team {updated_bot[0].t} after retry!")
+    else:
+        logging.info(f"TEAM DEBUG: Bot correctly in spectator mode (team 3)")
         if len(STATE.spec_ids) == 0:
             logging.info("No spectatable players found after team switch - may trigger server switch")
