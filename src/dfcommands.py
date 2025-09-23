@@ -89,12 +89,19 @@ def handle_f2(line_data):
 def handle_howmany(line_data):
     client_id = environ['TWITCH_API']['client_id']
     client_secret = environ['TWITCH_API']['client_secret']
-    token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
-    r = requests.post(token_url)
+    token_url = "https://id.twitch.tv/oauth2/token"
+    token_data = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'grant_type': 'client_credentials'
+    }
+    r = requests.post(token_url, data=token_data, timeout=10)
+    r.raise_for_status()
     token = r.json()['access_token']
     stream_url = f"https://api.twitch.tv/helix/streams?user_login={'defraglive'}"
     headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
-    r = requests.get(stream_url, headers=headers)
+    r = requests.get(stream_url, headers=headers, timeout=10)
+    r.raise_for_status()
     stream_data = r.json()['data']
     viewer_count = stream_data[0]['viewer_count']
     reply_string = f"$chsinfo(117) ^7-- you are being watched by ^3{viewer_count} ^7viewer" + ("s" if viewer_count > 0 else "")

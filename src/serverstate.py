@@ -295,7 +295,10 @@ WR_MESSAGE_COOLDOWN = 60  # 1 minute
 
 # Twitch account validation cache
 TWITCH_ACCOUNT_CACHE = {}  # username -> (exists, timestamp)
+TWITCH_LIVE_CACHE = {}  # username -> (is_live, timestamp)
 TWITCH_CACHE_EXPIRY = 300  # 5 minutes cache expiry
+TWITCH_LIVE_CACHE_EXPIRY = 60  # 1 minute cache for live status (more frequent updates needed)
+TWITCH_ERROR_BACKOFF = {}  # username -> (last_error_time, consecutive_errors)
 
 RECONNECTED_CHECK = False
 
@@ -338,12 +341,19 @@ def get_twitch_viewer_count():
     try:
         client_id = environ['TWITCH_API']['client_id']
         client_secret = environ['TWITCH_API']['client_secret']
-        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
-        token_response = requests.post(token_url)
+        token_url = "https://id.twitch.tv/oauth2/token"
+        token_data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'grant_type': 'client_credentials'
+        }
+        token_response = requests.post(token_url, data=token_data, timeout=10)
+        token_response.raise_for_status()
         token = token_response.json()['access_token']
         stream_url = f"https://api.twitch.tv/helix/streams?user_login={'defraglive'}"
         headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
-        response = requests.get(stream_url, headers=headers)
+        response = requests.get(stream_url, headers=headers, timeout=10)
+        response.raise_for_status()
         stream_data = response.json()['data']
         return stream_data[0]['viewer_count'] if stream_data else 0
     except Exception as e:
@@ -367,12 +377,19 @@ def check_twitch_account_exists(username):
     try:
         client_id = environ['TWITCH_API']['client_id']
         client_secret = environ['TWITCH_API']['client_secret']
-        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
-        token_response = requests.post(token_url)
+        token_url = "https://id.twitch.tv/oauth2/token"
+        token_data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'grant_type': 'client_credentials'
+        }
+        token_response = requests.post(token_url, data=token_data, timeout=10)
+        token_response.raise_for_status()
         token = token_response.json()['access_token']
         user_url = f"https://api.twitch.tv/helix/users?login={username}"
         headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
-        response = requests.get(user_url, headers=headers)
+        response = requests.get(user_url, headers=headers, timeout=10)
+        response.raise_for_status()
         user_data = response.json()['data']
         exists = len(user_data) > 0  # Account exists if user data returned
 
@@ -388,22 +405,66 @@ def check_twitch_account_exists(username):
 
 def check_twitch_channel_live(username):
     """
-    Check if a Twitch channel is currently live
+    Check if a Twitch channel is currently live with caching and error backoff
     Returns True if live, False if not live or error occurs
     """
+    global TWITCH_LIVE_CACHE, TWITCH_ERROR_BACKOFF
+    current_time = time.time()
+
+    # Check if we should skip due to recent errors (exponential backoff)
+    if username in TWITCH_ERROR_BACKOFF:
+        last_error_time, consecutive_errors = TWITCH_ERROR_BACKOFF[username]
+        backoff_time = min(300, 30 * (2 ** consecutive_errors))  # Max 5 minutes backoff
+        if current_time - last_error_time < backoff_time:
+            logging.debug(f"Skipping Twitch check for {username} due to backoff ({backoff_time}s)")
+            return False
+
+    # Check cache first
+    if username in TWITCH_LIVE_CACHE:
+        is_live, timestamp = TWITCH_LIVE_CACHE[username]
+        if current_time - timestamp < TWITCH_LIVE_CACHE_EXPIRY:
+            return is_live
+
     try:
         client_id = environ['TWITCH_API']['client_id']
         client_secret = environ['TWITCH_API']['client_secret']
-        token_url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
-        token_response = requests.post(token_url)
+        token_url = "https://id.twitch.tv/oauth2/token"
+        token_data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'grant_type': 'client_credentials'
+        }
+        token_response = requests.post(token_url, data=token_data, timeout=10)
+        token_response.raise_for_status()
         token = token_response.json()['access_token']
+
         stream_url = f"https://api.twitch.tv/helix/streams?user_login={username}"
         headers = {"Authorization": f"Bearer {token}", "Client-Id": client_id}
-        response = requests.get(stream_url, headers=headers)
+        response = requests.get(stream_url, headers=headers, timeout=10)
+        response.raise_for_status()
         stream_data = response.json()['data']
-        return len(stream_data) > 0  # Live if stream data exists
+        is_live = len(stream_data) > 0  # Live if stream data exists
+
+        # Cache the successful result
+        TWITCH_LIVE_CACHE[username] = (is_live, current_time)
+
+        # Clear error backoff on success
+        if username in TWITCH_ERROR_BACKOFF:
+            del TWITCH_ERROR_BACKOFF[username]
+
+        return is_live
     except Exception as e:
         logging.error(f"Error checking Twitch channel {username}: {e}")
+
+        # Update error backoff
+        if username in TWITCH_ERROR_BACKOFF:
+            last_error_time, consecutive_errors = TWITCH_ERROR_BACKOFF[username]
+            TWITCH_ERROR_BACKOFF[username] = (current_time, consecutive_errors + 1)
+        else:
+            TWITCH_ERROR_BACKOFF[username] = (current_time, 1)
+
+        # Cache negative result for failed API calls to avoid spam
+        TWITCH_LIVE_CACHE[username] = (False, current_time)
         return False
 
 
@@ -913,12 +974,20 @@ def validate_state():
         logging.error(f"Error in team status check: {e}")
         # Continue with normal validation even if team check fails
     
-    if STATE.get_player_by_id(STATE.bot_id) is None:
-        spectating_self = False
-    else:
-        # Current player spectated is our bot, and thus idle.
-        spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn \
-                      or STATE.current_player_id == STATE.bot_id
+    # Check if we're spectating ourselves - prioritize ID check as it's more reliable
+    spectating_self = STATE.current_player_id == STATE.bot_id
+
+    # Additional check using dfn if bot player exists and ID check wasn't sufficient
+    if not spectating_self and STATE.get_player_by_id(STATE.bot_id) is not None:
+        spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn
+
+    # DEBUG: Log spectating_self detection details when potentially problematic
+    if STATE.current_player_id == STATE.bot_id and not spectating_self:
+        logging.warning(f"SPECTATE_SELF DEBUG: Detection mismatch - current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, but spectating_self={spectating_self}")
+        bot_player = STATE.get_player_by_id(STATE.bot_id)
+        logging.warning(f"SPECTATE_SELF DEBUG: Bot player object exists: {bot_player is not None}, curr_dfn: {STATE.curr_dfn}")
+        if bot_player:
+            logging.warning(f"SPECTATE_SELF DEBUG: Bot player dfn: {bot_player.dfn}, dfn match: {STATE.curr_dfn == bot_player.dfn}")
 
     # Current player spectated has turned on the no-spec system
     spectating_nospec = STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id
@@ -957,10 +1026,16 @@ def validate_state():
     if spectating_self or spectating_nospec or spectating_afk:
         logging.info(f"SWITCH DEBUG: Triggering player switch - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
         logging.info(f"SWITCH DEBUG: Available spec_ids: {STATE.spec_ids}")
-        follow_id = random.choice(STATE.spec_ids) if STATE.spec_ids != [] else STATE.bot_id  # Find someone else to spec
+        # Find someone else to spec - avoid following ourselves if possible
+        if STATE.spec_ids:
+            follow_id = random.choice(STATE.spec_ids)
+        else:
+            # No valid spectate targets available - this should trigger a different behavior
+            # rather than following ourselves and getting stuck
+            follow_id = None
         logging.info(f"SWITCH DEBUG: Selected follow_id: {follow_id}")
 
-        if follow_id != STATE.bot_id:  # Found someone successfully, follow this person
+        if follow_id is not None and follow_id != STATE.bot_id:  # Found someone successfully, follow this person
             # Reset timeout for old player back to default when switching to different player
             if old_player_id != follow_id and old_player_id and str(old_player_id) in STATE.player_afk_timeouts:
                 del STATE.player_afk_timeouts[str(old_player_id)]
@@ -1001,14 +1076,17 @@ def validate_state():
             logging.info(f"SWITCH DEBUG: Successfully switched to player {follow_id} ({STATE.current_player.n if STATE.current_player else 'Unknown'})")
             return  # CRITICAL: Exit validation after successful switch
 
-        else:  # Only found ourselves to spec.
+        else:  # No valid targets available or only found ourselves to spec.
             if STATE.current_player_id != STATE.bot_id:  # Stop spectating player, go to free spec mode instead.
                 # Reset timeout when switching to bot
                 if str(STATE.current_player_id) in STATE.player_afk_timeouts:
                     del STATE.player_afk_timeouts[str(STATE.current_player_id)]
                     logging.info(f"Reset AFK timeout for player {STATE.current_player_id} back to default (switching to bot)")
-                
-                api.exec_command(f"follow {follow_id}")
+
+                # If no valid follow_id, just switch to free spec mode using bot ID
+                target_id = follow_id if follow_id is not None else STATE.bot_id
+                logging.info(f"SWITCH DEBUG: No valid targets, switching to free spec mode using ID {target_id}")
+                api.exec_command(f"follow {target_id}")
                 STATE.current_player_id = STATE.bot_id
             else:  # Was already spectating self. This is an idle strike
                 STATE.idle_counter += 1
