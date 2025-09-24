@@ -990,9 +990,14 @@ def validate_state():
             logging.warning(f"SPECTATE_SELF DEBUG: Bot player dfn: {bot_player.dfn}, dfn match: {STATE.curr_dfn == bot_player.dfn}")
 
     # Current player spectated has turned on the no-spec system
-    spectating_nospec = STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id
+    # Only consider players in nospec_ids as truly nospec (not team 3 spectators)
+    spectating_nospec = STATE.current_player_id in STATE.nospec_ids
     if spectating_nospec:
-        logging.info(f"DEBUG: spectating_nospec=True for player {STATE.current_player_id} - not in spec_ids: {STATE.spec_ids}")
+        logging.info(f"DEBUG: spectating_nospec=True for player {STATE.current_player_id} - in nospec_ids: {STATE.nospec_ids}")
+    elif STATE.current_player_id not in STATE.spec_ids and STATE.current_player_id != STATE.bot_id:
+        current_player = STATE.get_player_by_id(STATE.current_player_id)
+        if current_player:
+            logging.info(f"DEBUG: Player {STATE.current_player_id} ({current_player.n}) not in spec_ids but not nospec - team: {current_player.t}, c1: {current_player.c1}")
 
     # Get the AFK timeout for current player (could be extended)
     current_afk_timeout = STATE.get_afk_timeout_for_player(STATE.current_player_id)
@@ -1128,10 +1133,13 @@ def validate_state():
         STATE.current_player = STATE.get_player_by_id(STATE.current_player_id)
 
     else:  # AFK detection
+        logging.info(f"AFK DEBUG: Entering AFK detection block for player {STATE.current_player_id}")
         inputs = STATE.get_inputs()
+        logging.info(f"AFK DEBUG: Got inputs: '{inputs}' (length: {len(inputs)})")
         if inputs == '':
             # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
+            logging.info(f"AFK DEBUG: No inputs detected, incremented counter to {STATE.afk_counter}")
             
             # Show notifications starting from strike 10, then every 5 strikes: 10, 15, 20, 25, 30...
             if STATE.afk_counter >= 10 and (STATE.afk_counter - 10) % 5 == 0:  # Every 5 strikes after 10: 10, 15, 20, 25, 30...
