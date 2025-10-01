@@ -84,3 +84,16 @@ Execute the Twitch configs
 - [x] Refactor bot.py to remove the 'elif' galore
 - [ ] Integrate forever-free API for ?stonks. Yahoo api is good but only 500 /mo hits free. Look at coingecko for crypto
 - [ ] [Linux support](https://github.com/Defrag-racing/DefragLive/issues/58)
+
+## Configuration
+
+The bot includes a simple logging verbosity toggle that reduces repeated debug output during normal operation.
+
+- `LOG_ONLY_CHANGES` (default: `True`) — when enabled the bot will suppress repeated informational debug lines and only emit them when the underlying state changes. This applies to spectate, switch, AFK and periodic team checks. Set this to `False` in `src/config.py` if you need full verbose logs for debugging.
+
+Example:
+
+```py
+# src/config.py
+LOG_ONLY_CHANGES = True  # Set to False to see full verbose debug output
+```

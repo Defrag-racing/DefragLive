@@ -14,6 +14,10 @@ WS_ADDRESS = environ['WS_ADDRESS']
 STATE_REPORT_P = os.path.join(DF_DIR, "system", "reports", environ["SVINFO_REPORT_NAME"])
 INITIAL_REPORT_P = os.path.join(DF_DIR, "system", "reports", "initialstate.txt")
 
+# Toggle reduced logging behavior. If True, debug logs that only reflect unchanged
+# state will be suppressed and only emitted when state changes.
+LOG_ONLY_CHANGES = True
+
 BINDS = None
 
 

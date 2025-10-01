@@ -154,6 +154,19 @@ NATIONALITY_GREETINGS = {
     ]
 }
 
+# Keep last spectate snapshot to avoid spamming identical logs every serverstate change
+LAST_SPECTATE_SNAPSHOT = None
+LAST_AFK_SNAPSHOT = None
+LAST_SWITCH_SNAPSHOT = None
+LAST_TEAM_SNAPSHOT = None
+
+def _normalize_ids(id_list):
+    """Normalize a list of ids into a sorted tuple of ints for stable snapshots."""
+    try:
+        return tuple(sorted(int(x) for x in id_list)) if id_list else ()
+    except Exception:
+        # Fallback: convert to string-sorted tuple
+        return tuple(sorted(str(x) for x in id_list)) if id_list else ()
 
 def get_dominant_nationality(server_data):
     """
@@ -565,16 +578,30 @@ class State:
         # remove afk players from speccable id list
         [self.spec_ids.remove(afk_id) for afk_id in self.afk_ids if afk_id in self.spec_ids]
 
-        # DEBUG: Only log spectating info when there are issues or significant changes
-        if (len(self.spec_ids) == 0 or  # No spectatable players
-            len(self.nospec_ids) > 0 or  # NoSpec players present
-            len(self.afk_ids) > 0 or     # AFK players present
-            self.current_player_id == self.bot_id):  # Currently spectating bot (problematic)
-            logging.info(f"SPECTATE DEBUG: Spectatable players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.spec_ids]}")
-            logging.info(f"SPECTATE DEBUG: NoSpec players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid, self.get_player_by_id(pid).c1 if self.get_player_by_id(pid) else 'Unknown') for pid in self.nospec_ids]}")
-            logging.info(f"SPECTATE DEBUG: AFK players: {[(self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', pid) for pid in self.afk_ids]}")
-            logging.info(f"SPECTATE DEBUG: Free spectators (team 3): {[(p.n, p.id) for p in self.players if p.t == '3']}")
-            logging.info(f"SPECTATE DEBUG: Current spectating: {self.current_player.n if self.current_player else 'None'} (ID: {self.current_player_id})")
+        # Build a compact snapshot of the spectate-related state and only log when it changes
+        try:
+            # Normalize player id lists for stable snapshots
+            from config import LOG_ONLY_CHANGES
+
+            spec_list = tuple((self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', int(pid)) for pid in _normalize_ids(self.spec_ids))
+            nospec_list = tuple((self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', int(pid), self.get_player_by_id(pid).c1 if self.get_player_by_id(pid) else 'Unknown') for pid in _normalize_ids(self.nospec_ids))
+            afk_list = tuple((self.get_player_by_id(pid).n if self.get_player_by_id(pid) else 'Unknown', int(pid)) for pid in _normalize_ids(self.afk_ids))
+            free_specs = tuple((p.n, int(p.id)) for p in self.players if p.t == '3')
+            current_spec = (self.current_player.n if self.current_player else 'None', int(self.current_player_id) if self.current_player_id is not None else None)
+
+            snapshot = (spec_list, nospec_list, afk_list, free_specs, current_spec)
+        except Exception:
+            snapshot = None
+
+        global LAST_SPECTATE_SNAPSHOT
+        # Respect config toggle to allow full-verbose logs when desired
+        if not LOG_ONLY_CHANGES or snapshot is None or snapshot != LAST_SPECTATE_SNAPSHOT:
+            LAST_SPECTATE_SNAPSHOT = snapshot
+            logging.info(f"SPECTATE DEBUG: Spectatable players: {list(spec_list)}")
+            logging.info(f"SPECTATE DEBUG: NoSpec players: {list(nospec_list)}")
+            logging.info(f"SPECTATE DEBUG: AFK players: {list(afk_list)}")
+            logging.info(f"SPECTATE DEBUG: Free spectators (team 3): {list(free_specs)}")
+            logging.info(f"SPECTATE DEBUG: Current spectating: {current_spec[0]} (ID: {current_spec[1]})")
 
     def get_player_by_id(self, c_id):
         """Helper function for easily retrieving a player object from a client id number"""
@@ -945,7 +972,7 @@ def validate_state():
 
     if STATE is None:
         logging.warning("validate_state called but STATE is None, skipping validation")
-        returns
+        return
 
     old_player_id = STATE.current_player_id  # Store for timeout cleanup
     
@@ -1005,9 +1032,33 @@ def validate_state():
     # The player that we are spectating has been AFK for their custom limit
     spectating_afk = STATE.afk_counter >= current_afk_timeout
 
-    # DEBUG: Log the key conditions for switching logic
-    logging.info(f"SWITCH DEBUG: Conditions - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
-    logging.info(f"SWITCH DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, afk_counter={STATE.afk_counter}/{current_afk_timeout}")
+    # DEBUG: Log the key conditions for switching logic (only when the switch snapshot changes)
+    # Build a normalized switch snapshot. Normalize free spectators by id as ints.
+    try:
+        free_spec_ids = tuple(sorted(int(p.id) for p in STATE.players if getattr(p, 't', None) == '3'))
+    except Exception:
+        free_spec_ids = tuple(sorted(str(p.id) for p in STATE.players if getattr(p, 't', None) == '3'))
+
+    switch_snapshot = (
+        int(STATE.current_player_id) if STATE.current_player_id is not None else None,
+        _normalize_ids(STATE.spec_ids),
+        _normalize_ids(STATE.nospec_ids),
+        _normalize_ids(STATE.afk_ids),
+        free_spec_ids,
+    )
+
+    from config import LOG_ONLY_CHANGES
+    global LAST_SWITCH_SNAPSHOT
+    should_log_switch = False
+    if not LOG_ONLY_CHANGES or LAST_SWITCH_SNAPSHOT is None or LAST_SWITCH_SNAPSHOT != switch_snapshot:
+        should_log_switch = True
+
+    if should_log_switch:
+        logging.info(f"SWITCH DEBUG: Conditions - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
+        logging.info(f"SWITCH DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, afk_counter={STATE.afk_counter}/{current_afk_timeout}")
+        if LOG_ONLY_CHANGES:
+            # Remember this snapshot so identical future ticks won't re-log
+            LAST_SWITCH_SNAPSHOT = switch_snapshot
 
     # AFK player pre-processing
     if spectating_afk:
@@ -1029,8 +1080,9 @@ def validate_state():
 
     # Next player choice logic
     if spectating_self or spectating_nospec or spectating_afk:
-        logging.info(f"SWITCH DEBUG: Triggering player switch - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
-        logging.info(f"SWITCH DEBUG: Available spec_ids: {STATE.spec_ids}")
+        if should_log_switch:
+            logging.info(f"SWITCH DEBUG: Triggering player switch - spectating_self={spectating_self}, spectating_nospec={spectating_nospec}, spectating_afk={spectating_afk}")
+            logging.info(f"SWITCH DEBUG: Available spec_ids: {STATE.spec_ids}")
         # Find someone else to spec - avoid following ourselves if possible
         if STATE.spec_ids:
             follow_id = random.choice(STATE.spec_ids)
@@ -1038,7 +1090,8 @@ def validate_state():
             # No valid spectate targets available - this should trigger a different behavior
             # rather than following ourselves and getting stuck
             follow_id = None
-        logging.info(f"SWITCH DEBUG: Selected follow_id: {follow_id}")
+        if should_log_switch:
+            logging.info(f"SWITCH DEBUG: Selected follow_id: {follow_id}")
 
         if follow_id is not None and follow_id != STATE.bot_id:  # Found someone successfully, follow this person
             # Reset timeout for old player back to default when switching to different player
@@ -1079,6 +1132,8 @@ def validate_state():
             STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
             STATE.afk_counter = 0
             logging.info(f"SWITCH DEBUG: Successfully switched to player {follow_id} ({STATE.current_player.n if STATE.current_player else 'Unknown'})")
+            # After a successful manual switch, update the snapshot to reflect the new state
+            LAST_SWITCH_SNAPSHOT = switch_snapshot
             return  # CRITICAL: Exit validation after successful switch
 
         else:  # No valid targets available or only found ourselves to spec.
@@ -1090,7 +1145,8 @@ def validate_state():
 
                 # If no valid follow_id, just switch to free spec mode using bot ID
                 target_id = follow_id if follow_id is not None else STATE.bot_id
-                logging.info(f"SWITCH DEBUG: No valid targets, switching to free spec mode using ID {target_id}")
+                if should_log_switch:
+                    logging.info(f"SWITCH DEBUG: No valid targets, switching to free spec mode using ID {target_id}")
                 api.exec_command(f"follow {target_id}")
                 STATE.current_player_id = STATE.bot_id
             else:  # Was already spectating self. This is an idle strike
@@ -1133,13 +1189,38 @@ def validate_state():
         STATE.current_player = STATE.get_player_by_id(STATE.current_player_id)
 
     else:  # AFK detection
-        logging.info(f"AFK DEBUG: Entering AFK detection block for player {STATE.current_player_id}")
+        # Build a compact AFK snapshot that represents the AFK-related state we care about.
+        # Normalize lists (sort) so ordering changes don't cause log noise.
+        afk_list_sorted = tuple(sorted(STATE.afk_ids)) if STATE.afk_ids else ()
+        current_afk_snapshot = (
+            int(STATE.current_player_id) if STATE.current_player_id is not None else None,
+            int(STATE.afk_counter),
+            int(current_afk_timeout),
+            afk_list_sorted,
+        )
+
+        # Only log the AFK entering/checking messages when the snapshot changed or when we cross important thresholds.
+        should_log_afk = False
+        global LAST_AFK_SNAPSHOT
+        if LAST_AFK_SNAPSHOT is None or LAST_AFK_SNAPSHOT != current_afk_snapshot:
+            should_log_afk = True
+        # Also always log when reaching the notification threshold (first time) or when multiples occur as before
+        if STATE.afk_counter >= 10 and (STATE.afk_counter - 10) % 5 == 0:
+            should_log_afk = True
+
         inputs = STATE.get_inputs()
-        logging.info(f"AFK DEBUG: Got inputs: '{inputs}' (length: {len(inputs)})")
+
+        # Only log when AFK counter changes (increment/reset) or thresholds are hit
+        previous_afk = LAST_AFK_SNAPSHOT[1] if LAST_AFK_SNAPSHOT is not None else None
+
         if inputs == '':
             # Empty key presses. This is an AFK strike.
             STATE.afk_counter += 1
-            logging.info(f"AFK DEBUG: No inputs detected, incremented counter to {STATE.afk_counter}")
+            # Log only when the counter actually changed
+            if previous_afk is None or STATE.afk_counter != previous_afk:
+                # Only show increment logs for multiples of 5 to reduce noise
+                if STATE.afk_counter % 5 == 0:
+                    logging.info(f"AFK DEBUG: No inputs detected, incremented counter to {STATE.afk_counter}")
             
             # Show notifications starting from strike 10, then every 5 strikes: 10, 15, 20, 25, 30...
             if STATE.afk_counter >= 10 and (STATE.afk_counter - 10) % 5 == 0:  # Every 5 strikes after 10: 10, 15, 20, 25, 30...
@@ -1162,13 +1243,15 @@ def validate_state():
                         console.WS_Q.put(json.dumps(afk_msg))
                     except Exception as e:
                         logging.error(f"Failed to send AFK notification to Twitch: {e}")
-            
-                        
+
         else:
             # Activity detected, reset AFK strike counter for current player only
-            if STATE.afk_counter >= 15:
-                api.display_message("Activity detected. ^3AFK counter aborted.")
-                logging.info("Activity detected. AFK counter aborted.")
+            if STATE.afk_counter != 0:
+                # Only log on counter reset
+                if STATE.afk_counter >= 15:
+                    api.display_message("Activity detected. ^3AFK counter aborted.")
+                    logging.info("Activity detected. AFK counter aborted.")
+                logging.info(f"AFK DEBUG: Activity detected, resetting counter from {STATE.afk_counter} to 0")
 
             STATE.afk_counter = 0
             # Only remove current player from AFK list, keep other AFK players
@@ -1181,6 +1264,9 @@ def validate_state():
             AFK_HELP_THREADS.clear()
             # DO NOT reset timeout when player becomes active - keep extended timeout until player switch
             # The timeout will only be reset when switching to a different player (handled above)
+
+        # Save snapshot after processing so subsequent ticks can be compared
+        LAST_AFK_SNAPSHOT = current_afk_snapshot
 
 def switch_to_player(follow_id):
     """Helper function to handle player switching and timeout cleanup"""
@@ -1942,8 +2028,18 @@ def check_bot_team_status():
         logging.warning("TEAM DEBUG: Bot player not found during team check")
         return
 
-    # Log current team status for debugging
-    logging.info(f"TEAM DEBUG: Periodic check - Bot team: {bot_player.t}, Expected: 3 (spectator)")
+    # Log current team status for debugging (only when change-based logging allows it)
+    from config import LOG_ONLY_CHANGES
+    team_snapshot = (int(bot_player.id) if bot_player and bot_player.id is not None else None, bot_player.t)
+    global LAST_TEAM_SNAPSHOT
+    should_log_team = False
+    if not LOG_ONLY_CHANGES or LAST_TEAM_SNAPSHOT is None or LAST_TEAM_SNAPSHOT != team_snapshot:
+        should_log_team = True
+
+    if should_log_team:
+        logging.info(f"TEAM DEBUG: Periodic check - Bot team: {bot_player.t}, Expected: 3 (spectator)")
+        if LOG_ONLY_CHANGES:
+            LAST_TEAM_SNAPSHOT = team_snapshot
 
     # Check if bot is in player mode when it should be spectating
     if bot_player.t != '3':  # '3' means spectator, anything else is player mode
@@ -1975,6 +2071,7 @@ def check_bot_team_status():
                 if updated_bot[0].t != '3':
                     logging.error(f"TEAM DEBUG: CRITICAL - Bot still on team {updated_bot[0].t} after retry!")
     else:
-        logging.info(f"TEAM DEBUG: Bot correctly in spectator mode (team 3)")
-        if len(STATE.spec_ids) == 0:
-            logging.info("No spectatable players found after team switch - may trigger server switch")
+        if should_log_team:
+            logging.info(f"TEAM DEBUG: Bot correctly in spectator mode (team 3)")
+            if len(STATE.spec_ids) == 0:
+                logging.info("No spectatable players found after team switch - may trigger server switch")
