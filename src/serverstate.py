@@ -525,6 +525,7 @@ class State:
         if self.bot_id in self.spec_ids:
             self.spec_ids.remove(self.bot_id)
         self.afk_ids = []
+        self.afk_timestamps = {}  # Track when each player was flagged as AFK (player_id -> timestamp)
         self.connect_msg = None
         self.vote_time = time.time()
         self.vy_count = 0
@@ -974,8 +975,33 @@ def validate_state():
         logging.warning("validate_state called but STATE is None, skipping validation")
         return
 
+    # Clean up AFK flags older than 10 minutes
+    current_time = time.time()
+    afk_timeout_seconds = 10 * 60  # 10 minutes
+    expired_afk_ids = []
+
+    for player_id in list(STATE.afk_ids):
+        if player_id in STATE.afk_timestamps:
+            time_flagged = current_time - STATE.afk_timestamps[player_id]
+            if time_flagged >= afk_timeout_seconds:
+                expired_afk_ids.append(player_id)
+                STATE.afk_ids.remove(player_id)
+                del STATE.afk_timestamps[player_id]
+
+                # Add back to spectatable if player is still on server and not nospec
+                player = STATE.get_player_by_id(player_id)
+                if player and player.t != '3' and player.c1 not in ['nospec', 'nospecpm']:
+                    if player_id not in STATE.spec_ids:
+                        STATE.spec_ids.append(player_id)
+                        logging.info(f"AFK flag expired for player {player_id} ({player.n}) after 10 minutes - now spectatable")
+                        api.exec_command(f"say ^2{player.n} ^7AFK flag cleared - now spectatable again.")
+        else:
+            # No timestamp found - remove from AFK list (shouldn't happen, but safety check)
+            STATE.afk_ids.remove(player_id)
+            logging.warning(f"Removed player {player_id} from AFK list - no timestamp found")
+
     old_player_id = STATE.current_player_id  # Store for timeout cleanup
-    
+
     # EXISTING DEBUG LOGGING
     # logging.info(f"DEBUG: current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}")
     # logging.info(f"DEBUG: spectating_self check: {STATE.current_player_id == STATE.bot_id}")
@@ -1066,14 +1092,16 @@ def validate_state():
             STATE.spec_ids.remove(STATE.current_player_id)  # Remove afk player from list of spec-able players
             # Add them to the afk list
             was_already_afk = STATE.current_player_id in STATE.afk_ids
-            STATE.afk_ids.append(STATE.current_player_id) if STATE.current_player_id not in STATE.afk_ids else None
+            if STATE.current_player_id not in STATE.afk_ids:
+                STATE.afk_ids.append(STATE.current_player_id)
+                STATE.afk_timestamps[STATE.current_player_id] = time.time()  # Record when flagged
 
             if not was_already_afk:
                 # Newly flagged as AFK - notify in chat
                 afk_player = STATE.get_player_by_id(STATE.current_player_id)
                 player_name = afk_player.n if afk_player else f"ID{STATE.current_player_id}"
                 logging.info(f"Added player {STATE.current_player_id} to AFK list")
-                api.exec_command(f"say ^1{player_name} ^7flagged as AFK - ignoring until manually spectated.")
+                api.exec_command(f"say ^1{player_name} ^7flagged as AFK - ignoring for 10 minutes.")
 
             if not PAUSE_STATE:
                 logging.info("AFK. Switching...")
@@ -1297,6 +1325,9 @@ def validate_state():
             # Only remove current player from AFK list, keep other AFK players
             if STATE.current_player_id in STATE.afk_ids:
                 STATE.afk_ids.remove(STATE.current_player_id)
+                # Also clean up timestamp
+                if STATE.current_player_id in STATE.afk_timestamps:
+                    del STATE.afk_timestamps[STATE.current_player_id]
                 logging.info(f"Removed player {STATE.current_player_id} from AFK list")
             IGNORE_IPS = []
             # CANCEL ANY ACTIVE AFK COUNTDOWNS
@@ -1357,7 +1388,8 @@ def connect(ip, caller=None):
         STATE.idle_counter = 0
         STATE.afk_counter = 0
         STATE.afk_ids = []
-    
+        STATE.afk_timestamps = {}  # Clear AFK timestamps on new connection
+
     if caller is not None:
         if STATE:
             STATE.connect_msg = f"^7Brought by ^3{caller}"
@@ -1688,7 +1720,8 @@ def enhanced_connect(ip, caller=None):
         STATE.idle_counter = 0
         STATE.afk_counter = 0
         STATE.afk_ids = []
-    
+        STATE.afk_timestamps = {}  # Clear AFK timestamps on reconnection
+
     if caller is not None:
         if STATE:
             STATE.connect_msg = f"^7Brought by ^3{caller}"
