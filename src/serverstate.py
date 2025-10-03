@@ -1065,8 +1065,16 @@ def validate_state():
         try:
             STATE.spec_ids.remove(STATE.current_player_id)  # Remove afk player from list of spec-able players
             # Add them to the afk list
+            was_already_afk = STATE.current_player_id in STATE.afk_ids
             STATE.afk_ids.append(STATE.current_player_id) if STATE.current_player_id not in STATE.afk_ids else None
-            logging.info(f"Added player {STATE.current_player_id} to AFK list")
+
+            if not was_already_afk:
+                # Newly flagged as AFK - notify in chat
+                afk_player = STATE.get_player_by_id(STATE.current_player_id)
+                player_name = afk_player.n if afk_player else f"ID{STATE.current_player_id}"
+                logging.info(f"Added player {STATE.current_player_id} to AFK list")
+                api.exec_command(f"say ^1{player_name} ^7flagged as AFK - ignoring until manually spectated.")
+
             if not PAUSE_STATE:
                 logging.info("AFK. Switching...")
                 api.display_message("^3AFK detected. ^7Switching to the next player.", time=5)
@@ -1167,9 +1175,41 @@ def validate_state():
 
             if STATE.idle_counter >= IDLE_TIMEOUT or spectating_afk:
                 # There's been no one on the server for a while or only afks. Switch servers.
-                # Send goodbye message first
-                api.exec_command("say ^1AFK/Nospec ^7on all available players has been detected. ^3Farewell.")
-                
+                # Build detailed farewell message explaining why bot is leaving
+                farewell_parts = []
+
+                # List AFK players with names
+                if STATE.afk_ids:
+                    afk_names = [STATE.get_player_by_id(pid).n if STATE.get_player_by_id(pid) else f"ID{pid}" for pid in STATE.afk_ids]
+                    farewell_parts.append(f"^1AFK: ^7{', '.join(afk_names)}")
+
+                # List Nospec players with names
+                if STATE.nospec_ids:
+                    nospec_names = [STATE.get_player_by_id(pid).n if STATE.get_player_by_id(pid) else f"ID{pid}" for pid in STATE.nospec_ids]
+                    farewell_parts.append(f"^1Nospec: ^7{', '.join(nospec_names)}")
+
+                # List free spectators (team 3) with names
+                free_specs = [p.n for p in STATE.players if p.t == '3' and p.id != STATE.bot_id]
+                if free_specs:
+                    farewell_parts.append(f"^1Spectating: ^7{', '.join(free_specs)}")
+
+                # Build final message - if message gets too long, split into multiple says
+                if farewell_parts:
+                    reason_msg = " | ".join(farewell_parts)
+                    # Quake 3 say command has ~150 character limit, so split if needed
+                    if len(reason_msg) > 120:
+                        # Send reason details first
+                        api.exec_command(f"say {reason_msg}")
+                        time.sleep(0.5)
+                        api.exec_command("say ^3Switching servers. Farewell.")
+                    else:
+                        api.exec_command(f"say {reason_msg} ^3- Farewell.")
+                elif len(STATE.players) <= 1:  # Only bot left
+                    api.exec_command("say ^7No active players remaining. ^3Farewell.")
+                else:
+                    # Fallback (shouldn't happen, but just in case)
+                    api.exec_command("say ^7No spectatable players available. ^3Farewell.")
+
                 # Wait 2 seconds before searching for new server and connecting
                 time.sleep(2)
                 
