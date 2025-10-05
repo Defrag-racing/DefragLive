@@ -1357,7 +1357,9 @@ def validate_state():
                 if STATE.afk_counter >= 15:
                     api.display_message("Activity detected. ^3AFK counter aborted.")
                     logging.info("Activity detected. AFK counter aborted.")
-                logging.info(f"AFK DEBUG: Activity detected, resetting counter from {STATE.afk_counter} to 0")
+                # Only log debug message if counter was significant (5 or more)
+                if STATE.afk_counter >= 5:
+                    logging.info(f"AFK DEBUG: Activity detected, resetting counter from {STATE.afk_counter} to 0")
 
             STATE.afk_counter = 0
             # Only remove current player from AFK list, keep other AFK players
