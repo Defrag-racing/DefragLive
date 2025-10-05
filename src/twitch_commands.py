@@ -24,6 +24,38 @@ async def connect(ctx, author, args):
 
     api.exec_command("say ^7Switching servers. ^3Farewell.")
 
+    # DETAILED DEBUG: Print complete server state before user-requested switch
+    if serverstate.STATE:
+        logging.info("=" * 80)
+        logging.info(f"LEAVING SERVER (User requested by {author}) - DETAILED STATE DUMP:")
+        logging.info(f"Switching to: {ip}")
+        logging.info(f"Current Server IP: {serverstate.STATE.ip}")
+        logging.info(f"Total players on server: {len(serverstate.STATE.players)}")
+        logging.info("-" * 80)
+
+        # Print each player with full details
+        for player in serverstate.STATE.players:
+            status_flags = []
+            if player.id == serverstate.STATE.bot_id:
+                status_flags.append("BOT")
+            if player.id in serverstate.STATE.spec_ids:
+                status_flags.append("SPECTATABLE")
+            if player.id in serverstate.STATE.nospec_ids:
+                status_flags.append("NOSPEC")
+            if player.id in serverstate.STATE.afk_ids:
+                status_flags.append("AFK")
+            if player.t == '3':
+                status_flags.append("FREE_SPEC")
+
+            status = f"[{', '.join(status_flags)}]" if status_flags else "[UNKNOWN_STATUS]"
+            logging.info(f"  Player ID {player.id}: '{player.n}' - Team: {player.t}, c1: '{player.c1}' {status}")
+
+        logging.info("-" * 80)
+        logging.info(f"Spectatable IDs: {serverstate.STATE.spec_ids}")
+        logging.info(f"Nospec IDs: {serverstate.STATE.nospec_ids}")
+        logging.info(f"AFK IDs: {serverstate.STATE.afk_ids}")
+        logging.info("=" * 80)
+
     # Wait 2 seconds before connecting to new server
     time.sleep(2)
 

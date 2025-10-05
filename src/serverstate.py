@@ -1238,9 +1238,47 @@ def validate_state():
                     # Fallback (shouldn't happen, but just in case)
                     api.exec_command("say ^7No spectatable players available. ^3Farewell.")
 
+                # DETAILED DEBUG: Print complete server state before leaving
+                logging.info("=" * 80)
+                logging.info("LEAVING SERVER - DETAILED STATE DUMP:")
+                logging.info(f"Reason: {'spectating_afk=True' if spectating_afk else f'idle_counter={STATE.idle_counter}/{IDLE_TIMEOUT}'}")
+                logging.info(f"Server IP: {STATE.ip}")
+                logging.info(f"Total players on server: {len(STATE.players)}")
+                logging.info("-" * 80)
+
+                # Print each player with full details
+                for player in STATE.players:
+                    status_flags = []
+                    if player.id == STATE.bot_id:
+                        status_flags.append("BOT")
+                    if player.id in STATE.spec_ids:
+                        status_flags.append("SPECTATABLE")
+                    if player.id in STATE.nospec_ids:
+                        status_flags.append("NOSPEC")
+                    if player.id in STATE.afk_ids:
+                        # Show how long they've been AFK
+                        if player.id in STATE.afk_timestamps:
+                            afk_duration = int(time.time() - STATE.afk_timestamps[player.id])
+                            status_flags.append(f"AFK({afk_duration}s)")
+                        else:
+                            status_flags.append("AFK(no timestamp)")
+                    if player.t == '3':
+                        status_flags.append("FREE_SPEC")
+
+                    status = f"[{', '.join(status_flags)}]" if status_flags else "[UNKNOWN_STATUS]"
+                    logging.info(f"  Player ID {player.id}: '{player.n}' - Team: {player.t}, c1: '{player.c1}' {status}")
+
+                logging.info("-" * 80)
+                logging.info(f"Spectatable IDs (spec_ids): {STATE.spec_ids}")
+                logging.info(f"Nospec IDs (nospec_ids): {STATE.nospec_ids}")
+                logging.info(f"AFK IDs (afk_ids): {STATE.afk_ids}")
+                logging.info(f"Current player ID being spectated: {STATE.current_player_id}")
+                logging.info(f"Bot ID: {STATE.bot_id}")
+                logging.info("=" * 80)
+
                 # Wait 2 seconds before searching for new server and connecting
                 time.sleep(2)
-                
+
                 IGNORE_IPS.append(STATE.ip) if STATE.ip not in IGNORE_IPS and STATE.ip != "" else None
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 logging.info(f"Next active server found: {new_ip}")
