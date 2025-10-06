@@ -561,7 +561,7 @@ class State:
         
         if bot_player:
             # Verify bot_id is still correct (can change during map changes)
-            new_bot_id = bot_player[0].id
+            new_bot_id = bot_player.id
             if new_bot_id != self.bot_id:
                 logging.warning(f"BOT ID CHANGED: Old bot_id={self.bot_id}, New bot_id={new_bot_id}")
                 self.bot_id = new_bot_id
