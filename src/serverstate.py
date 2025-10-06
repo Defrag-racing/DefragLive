@@ -748,6 +748,19 @@ def start():
                     # Given that a new report exists, read this new data.
                     server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
 
+                    # Validate: if player count drops drastically, likely corrupt read - wait and retry
+                    if bool(server_info) and STATE is not None and num_players is not None:
+                        if STATE.num_players is not None and STATE.num_players > 5:
+                            # If we had many players and suddenly only see half or less, likely corrupt read
+                            if num_players < (STATE.num_players * 0.5):  # More than 50% drop
+                                logging.warning(f"CORRUPT READ DETECTED: Player count dropped from {STATE.num_players} to {num_players}. Waiting 2s for next report...")
+                                time.sleep(2)
+                                # Request fresh report and read again
+                                api.exec_command("silent svinfo_report serverstate.txt", verbose=False)
+                                time.sleep(0.5)
+                                server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
+                                logging.info(f"Re-read complete: now showing {num_players} players")
+
                     if bool(server_info) and STATE is not None:   # New data is not empty and valid. Update the state object.
                         STATE.players = players
                         STATE.update_info(server_info)
