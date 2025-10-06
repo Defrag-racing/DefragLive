@@ -741,6 +741,8 @@ def start():
                 if not PAUSE_STATE:
                     api.exec_command("varmath color2 = $chsinfo(152);"  # Store inputs in color2
                                            "silent svinfo_report serverstate.txt", verbose=False)  # Write a new report
+                    # Wait 0.5s to ensure file is completely written before reading
+                    time.sleep(0.5)
                 elif not VID_RESTARTING:
                     raise Exception("VidPaused")
 
