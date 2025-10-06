@@ -560,11 +560,19 @@ class State:
                 break
         
         if bot_player:
-            # Verify bot_id is still correct (can change during map changes)
+            # Verify bot_id is still correct (can change during map changes/server switches)
             new_bot_id = bot_player.id
             if new_bot_id != self.bot_id:
-                logging.warning(f"BOT ID CHANGED: Old bot_id={self.bot_id}, New bot_id={new_bot_id}")
+                logging.warning(f"BOT ID MISMATCH DETECTED!")
+                logging.warning(f"  Old bot_id: {self.bot_id}")
+                logging.warning(f"  New bot_id: {new_bot_id}")
+                logging.warning(f"  Current player_id: {self.current_player_id}")
+                logging.warning(f"  Updating bot_id to {new_bot_id}")
                 self.bot_id = new_bot_id
+                # If we were spectating ourselves with wrong ID, reset to new bot_id
+                if self.current_player_id == self.bot_id or self.current_player_id not in [p.id for p in self.players]:
+                    self.current_player_id = self.bot_id
+                    logging.warning(f"  Reset current_player_id to new bot_id: {self.bot_id}")
 
             # Only reset current_player_id if it's invalid, don't always reset to bot_id
             # Convert player IDs to int for proper comparison
