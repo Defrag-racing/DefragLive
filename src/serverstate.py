@@ -1063,6 +1063,13 @@ def validate_state():
     if not spectating_self and STATE.get_player_by_id(STATE.bot_id) is not None:
         spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn
 
+    # ALSO check if we're spectating a spectator (team 3) - bot should only spectate active players
+    if not spectating_self:
+        current_player = STATE.get_player_by_id(STATE.current_player_id)
+        if current_player and current_player.t == '3':
+            logging.info(f"SPECTATING_SPECTATOR DETECTED: Currently spectating {current_player.n} (ID: {STATE.current_player_id}) who is team 3 (spectator). Switching to active player.")
+            spectating_self = True  # Treat this like spectating self - need to switch away
+
     # DEBUG: Log spectating_self detection details when potentially problematic
     if STATE.current_player_id == STATE.bot_id and not spectating_self:
         logging.warning(f"SPECTATE_SELF DEBUG: Detection mismatch - current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, but spectating_self={spectating_self}")
