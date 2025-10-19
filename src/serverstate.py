@@ -1063,10 +1063,15 @@ def validate_state():
     if not spectating_self and STATE.get_player_by_id(STATE.bot_id) is not None:
         spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn
 
-    # ALSO check if we're spectating a spectator (team 3) - bot should only spectate active players
-    if not spectating_self:
+    # ALSO check if we're spectating a spectator (team 3) or a disconnected player - bot should only spectate active players
+    if not spectating_self and STATE.current_player_id != STATE.bot_id:
         current_player = STATE.get_player_by_id(STATE.current_player_id)
-        if current_player and current_player.t == '3':
+        if current_player is None:
+            # Spectating a player who no longer exists (disconnected)
+            logging.info(f"SPECTATING_DISCONNECTED DETECTED: Currently spectating ID {STATE.current_player_id} who no longer exists. Switching to active player.")
+            spectating_self = True  # Treat this like spectating self - need to switch away
+        elif current_player.t == '3':
+            # Spectating a spectator (team 3)
             logging.info(f"SPECTATING_SPECTATOR DETECTED: Currently spectating {current_player.n} (ID: {STATE.current_player_id}) who is team 3 (spectator). Switching to active player.")
             spectating_self = True  # Treat this like spectating self - need to switch away
 
