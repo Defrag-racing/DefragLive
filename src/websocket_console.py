@@ -27,6 +27,11 @@ import logging
 SETTINGS_QUEUE = []
 CANCEL_PENDING_WRITECONFIG = False
 
+# Serverstate change logging throttle
+SERVERSTATE_CHANGE_COUNTER = 0
+LAST_SERVERSTATE_LOG_TIME = 0
+SERVERSTATE_LOG_INTERVAL = 10  # Log every 10 changes or every 30 seconds
+
 def handle_settings_command(content):
     """Handle settings command from VPS"""
     # QUEUE SETTINGS COMMANDS DURING MAP LOADING
@@ -464,10 +469,33 @@ def run_flask_server(host, port):
 # ------------------------------------------------------------
 
 def notify_serverstate_change():
-    data = serverstate_to_json()
+    global SERVERSTATE_CHANGE_COUNTER, LAST_SERVERSTATE_LOG_TIME
 
+    data = serverstate_to_json()
     console.WS_Q.put(json.dumps({'action': 'serverstate', 'message': data}))
-    logging.info('--- serverstate change ---')
+
+    # Increment counter
+    SERVERSTATE_CHANGE_COUNTER += 1
+    current_time = time.time()
+    time_since_last_log = current_time - LAST_SERVERSTATE_LOG_TIME
+
+    # Log every 10 changes OR every 30 seconds (whichever comes first)
+    should_log = (SERVERSTATE_CHANGE_COUNTER % SERVERSTATE_LOG_INTERVAL == 0) or (time_since_last_log >= 30)
+
+    if should_log:
+        # Show what changed in a concise way
+        change_info = []
+        if serverstate.STATE:
+            if hasattr(serverstate.STATE, 'num_players'):
+                change_info.append(f"{serverstate.STATE.num_players} players")
+            if hasattr(serverstate.STATE, 'current_player_id'):
+                player = serverstate.STATE.get_player_by_id(serverstate.STATE.current_player_id)
+                if player:
+                    change_info.append(f"watching {player.n}")
+
+        info_str = f" ({', '.join(change_info)})" if change_info else ""
+        logging.info(f"[Serverstate] {SERVERSTATE_CHANGE_COUNTER} updates processed{info_str}")
+        LAST_SERVERSTATE_LOG_TIME = current_time
 
 def handle_ws_command(msg):
     logging.info('[WS] Handle command: %s', str(msg))
