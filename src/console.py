@@ -511,8 +511,21 @@ def process_line(line):
             logging.warning(f"Follow command failed for player {player_id} - player not active yet")
             # Track this failed attempt to prevent retry loops
             if hasattr(serverstate, 'FAILED_FOLLOW_ATTEMPTS'):
-                serverstate.FAILED_FOLLOW_ATTEMPTS[player_id] = time.time()
-                logging.info(f"Added player {player_id} to failed follow cooldown list")
+                if player_id not in serverstate.FAILED_FOLLOW_ATTEMPTS:
+                    serverstate.FAILED_FOLLOW_ATTEMPTS[player_id] = {'timestamp': time.time(), 'count': 1}
+                    logging.info(f"Added player {player_id} to failed follow cooldown list (attempt 1)")
+                else:
+                    # Increment failure count
+                    serverstate.FAILED_FOLLOW_ATTEMPTS[player_id]['count'] += 1
+                    serverstate.FAILED_FOLLOW_ATTEMPTS[player_id]['timestamp'] = time.time()
+                    failure_count = serverstate.FAILED_FOLLOW_ATTEMPTS[player_id]['count']
+                    logging.warning(f"Player {player_id} follow failed again (attempt {failure_count})")
+
+                    # After MAX_FOLLOW_FAILURES, permanently exclude this player
+                    if failure_count >= serverstate.MAX_FOLLOW_FAILURES:
+                        serverstate.PERMANENTLY_EXCLUDED.add(player_id)
+                        logging.error(f"Player {player_id} failed {failure_count} times - permanently excluded from spectating")
+                        del serverstate.FAILED_FOLLOW_ATTEMPTS[player_id]
 
         if line in {"VoteVote passed.", "RE_Shutdown( 0 )"}:
             if not serverstate.PAUSE_STATE:

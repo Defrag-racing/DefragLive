@@ -57,8 +57,10 @@ LAST_PAUSE_LOG_TIME = 0
 PAUSE_LOG_INTERVAL = 10  # Log every 10 pauses or every 30 seconds
 
 # Track failed follow attempts to prevent infinite retry loops
-FAILED_FOLLOW_ATTEMPTS = {}  # {player_id: timestamp} - track when follow commands fail
+FAILED_FOLLOW_ATTEMPTS = {}  # {player_id: {'timestamp': time, 'count': int}} - track failed attempts
 FAILED_FOLLOW_COOLDOWN = 10  # Retry after 10 seconds
+MAX_FOLLOW_FAILURES = 3  # Give up after 3 consecutive failures
+PERMANENTLY_EXCLUDED = set()  # Player IDs that failed too many times
 
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
@@ -602,15 +604,23 @@ class State:
         # remove afk players from speccable id list
         [self.spec_ids.remove(afk_id) for afk_id in self.afk_ids if afk_id in self.spec_ids]
 
+        # Remove permanently excluded players (too many consecutive failures)
+        global PERMANENTLY_EXCLUDED
+        perm_excluded = [pid for pid in self.spec_ids if pid in PERMANENTLY_EXCLUDED]
+        if perm_excluded:
+            [self.spec_ids.remove(pid) for pid in perm_excluded]
+            logging.info(f"Permanently excluded players (too many failures): {perm_excluded}")
+
         # Remove players with recent failed follow attempts (cooldown period)
         global FAILED_FOLLOW_ATTEMPTS, FAILED_FOLLOW_COOLDOWN
         current_time = time.time()
         players_to_remove = []
-        for player_id, fail_time in list(FAILED_FOLLOW_ATTEMPTS.items()):
+        for player_id, fail_data in list(FAILED_FOLLOW_ATTEMPTS.items()):
+            fail_time = fail_data['timestamp']
             # If cooldown has expired, remove from failed list and allow retrying
             if current_time - fail_time > FAILED_FOLLOW_COOLDOWN:
                 del FAILED_FOLLOW_ATTEMPTS[player_id]
-                logging.info(f"Cooldown expired for player {player_id} - can retry spectating")
+                logging.info(f"Cooldown expired for player {player_id} - can retry spectating (attempt {fail_data['count'] + 1})")
             # If still in cooldown and player is in spec_ids, remove them temporarily
             elif player_id in self.spec_ids:
                 players_to_remove.append(player_id)
@@ -1255,6 +1265,15 @@ def validate_state():
             STATE.current_player = STATE.get_player_by_id(int(follow_id))
             STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
             STATE.afk_counter = 0
+
+            # If this player was previously in failed/excluded lists, clear them since we're attempting to spectate
+            global FAILED_FOLLOW_ATTEMPTS, PERMANENTLY_EXCLUDED
+            if follow_id in FAILED_FOLLOW_ATTEMPTS:
+                del FAILED_FOLLOW_ATTEMPTS[follow_id]
+            if follow_id in PERMANENTLY_EXCLUDED:
+                PERMANENTLY_EXCLUDED.discard(follow_id)
+                logging.info(f"Removed player {follow_id} from permanent exclusion list - retrying spectate")
+
             logging.info(f"SWITCH DEBUG: Successfully switched to player {follow_id} ({STATE.current_player.n if STATE.current_player else 'Unknown'})")
             # After a successful manual switch, update the snapshot to reflect the new state
             LAST_SWITCH_SNAPSHOT = switch_snapshot
