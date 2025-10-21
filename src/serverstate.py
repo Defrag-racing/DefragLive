@@ -1777,13 +1777,19 @@ def enhanced_connect(ip, caller=None):
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, CURRENT_IP
     global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS, RECOVERY_IN_PROGRESS
     global STATE_INITIALIZED, RECONNECTED_CHECK
-    
+
     # Reset recovery state for new connections
     if ip != CURRENT_IP:
         reset_recovery_state()
-    
-    # Record connection start time
-    CONNECTION_START_TIME = time.time()
+
+    # Record connection start time - BUT don't reset if we're already connecting to same server
+    # This prevents timeout bypass when user spam-reconnects to same hung server
+    if CONNECTION_START_TIME is None or ip != CURRENT_IP or not (PAUSE_STATE or CONNECTING):
+        CONNECTION_START_TIME = time.time()
+        logging.info(f"Connection timer started for {ip}")
+    else:
+        elapsed = time.time() - CONNECTION_START_TIME
+        logging.warning(f"Reconnecting to same server while already stuck - keeping original timer (elapsed: {elapsed:.0f}s)")
     
     # Cancel any AFK operations
     AFK_COUNTDOWN_ACTIVE = False
@@ -1796,6 +1802,13 @@ def enhanced_connect(ip, caller=None):
     PAUSE_STATE = True
     CONNECTING = True
     CURRENT_IP = ip
+
+    # IMPORTANT: Set console pause timer so health check can detect stuck connections
+    # Even if game stops outputting console lines, the health check will still work
+    import console
+    if console.PAUSE_STATE_START_TIME is None:
+        console.PAUSE_STATE_START_TIME = time.time()
+        logging.info("Pause timer initialized for connection timeout detection")
     
     if STATE:
         STATE.idle_counter = 0
@@ -1817,20 +1830,34 @@ def enhanced_connect(ip, caller=None):
     api.exec_command("connect " + ip, verbose=False)
 
 def start_connection_monitor():
-    """Start a background thread to monitor connection timeout"""
+    """Start a background thread to monitor connection timeout - checks periodically"""
     def monitor_connection():
         global CONNECTION_START_TIME, PAUSE_STATE, CONNECTING
-        
-        time.sleep(MAX_CONNECTION_TIMEOUT)
-        
-        # Check if we're still trying to connect after timeout
-        if (CONNECTION_START_TIME and 
-            time.time() - CONNECTION_START_TIME > MAX_CONNECTION_TIMEOUT and
-            (PAUSE_STATE or CONNECTING)):
-            
-            logging.warning(f"Connection timeout after {MAX_CONNECTION_TIMEOUT}s - forcing recovery")
-            force_connection_recovery("Connection timeout")
-    
+
+        # Check every 10 seconds instead of sleeping once for 90s
+        # This prevents the issue where CONNECTION_START_TIME gets reset while we're asleep
+        check_interval = 10
+        max_checks = MAX_CONNECTION_TIMEOUT // check_interval
+
+        for i in range(int(max_checks) + 1):
+            time.sleep(check_interval)
+
+            # Check if we're still trying to connect
+            if CONNECTION_START_TIME and (PAUSE_STATE or CONNECTING):
+                elapsed = time.time() - CONNECTION_START_TIME
+
+                # If we've exceeded the timeout, trigger recovery
+                if elapsed > MAX_CONNECTION_TIMEOUT:
+                    logging.warning(f"Connection monitor: timeout after {elapsed:.0f}s - forcing recovery")
+                    force_connection_recovery("Connection timeout")
+                    return
+                elif i % 3 == 0:  # Log every 30 seconds
+                    logging.info(f"Connection monitor: still connecting, elapsed: {elapsed:.0f}s/{MAX_CONNECTION_TIMEOUT}s")
+            else:
+                # Connection completed successfully, exit monitor
+                logging.info("Connection monitor: connection completed, exiting monitor")
+                return
+
     monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
     monitor_thread.start()
 
