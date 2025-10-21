@@ -611,12 +611,8 @@ class State:
             [self.spec_ids.remove(pid) for pid in perm_excluded]
             logging.info(f"Permanently excluded players (too many failures): {perm_excluded}")
 
-        # Clear failure count for player we're successfully spectating
-        global FAILED_FOLLOW_ATTEMPTS
-        if self.current_player_id != self.bot_id and self.current_player_id in FAILED_FOLLOW_ATTEMPTS:
-            # We're successfully spectating this player, clear their failure history
-            del FAILED_FOLLOW_ATTEMPTS[self.current_player_id]
-            logging.info(f"Successfully spectating player {self.current_player_id} - cleared failure count")
+        # NOTE: Don't clear failure count here - we need to wait until after spectating_self check
+        # to confirm we're actually successfully spectating the player (not just set current_player_id)
 
         # Remove players with recent failed follow attempts (cooldown period)
         global FAILED_FOLLOW_COOLDOWN
@@ -1064,6 +1060,8 @@ def validate_state():
     global RECONNECTED_CHECK
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
+    global FAILED_FOLLOW_ATTEMPTS
+    global PERMANENTLY_EXCLUDED
 
     if STATE is None:
         logging.warning("validate_state called but STATE is None, skipping validation")
@@ -1192,6 +1190,13 @@ def validate_state():
             # Remember this snapshot so identical future ticks won't re-log
             LAST_SWITCH_SNAPSHOT = switch_snapshot
 
+    # Clear failure count for player we're successfully spectating
+    # Only clear if NOT spectating_self (meaning we're actually on a real player, not stuck on bot)
+    if not spectating_self and STATE.current_player_id != STATE.bot_id and STATE.current_player_id in FAILED_FOLLOW_ATTEMPTS:
+        # We're successfully spectating this player (follow succeeded), clear their failure history
+        del FAILED_FOLLOW_ATTEMPTS[STATE.current_player_id]
+        logging.info(f"Successfully spectating player {STATE.current_player_id} - cleared failure count")
+
     # AFK player pre-processing
     if spectating_afk:
         try:
@@ -1275,7 +1280,6 @@ def validate_state():
             STATE.afk_counter = 0
 
             # Clear permanent exclusion to allow retry, but keep failure count to track consecutive failures
-            global FAILED_FOLLOW_ATTEMPTS, PERMANENTLY_EXCLUDED
             if follow_id in PERMANENTLY_EXCLUDED:
                 PERMANENTLY_EXCLUDED.discard(follow_id)
                 logging.info(f"Removed player {follow_id} from permanent exclusion list - retrying spectate")
