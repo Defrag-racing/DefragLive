@@ -776,6 +776,13 @@ def start():
                                 server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
                                 logging.info(f"Re-read complete: now showing {num_players} players")
 
+                    if STATE is None:
+                        # STATE is None, reinitialize
+                        logging.warning("STATE is None during update, reinitializing...")
+                        if not initialize_state():
+                            logging.error("Failed to initialize state, will retry on next update cycle")
+                            continue
+
                     if bool(server_info) and STATE is not None:   # New data is not empty and valid. Update the state object.
                         STATE.players = players
                         STATE.update_info(server_info)
@@ -791,10 +798,9 @@ def start():
                         prev_state = curr_state
                         prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
-                    elif STATE is None:
-                        # STATE is None, reinitialize
-                        logging.warning("STATE is None during update, reinitializing...")
-                        initialize_state()
+                    else:
+                        # Data was invalid but STATE exists - just skip this update and try again next cycle
+                        logging.warning(f"Skipping serverstate update - server_info empty or invalid (server_info={bool(server_info)}, STATE={STATE is not None})")
                 if getattr(STATE, 'vote_active', False) and STATE is not None:
                     STATE.handle_vote()
         except Exception as e:
