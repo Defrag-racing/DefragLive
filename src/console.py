@@ -495,14 +495,24 @@ def process_line(line):
             # Extract map name from the error
             map_name_match = re.search(r"couldn't load maps/(.+?)\.bsp", line)
             map_name = map_name_match.group(1) if map_name_match else "unknown"
-            
+
             # Create line_data for the map error (this will go through normal processing)
             line_data["id"] = message_to_id(f"MAP_ERROR_{map_name}_{time.time()}")
             line_data["type"] = "MAP_ERROR"
             line_data["author"] = None
             line_data["content"] = f"^1Map loading failed: ^7{map_name}.bsp could not be loaded. ^3Reconnecting in 60 seconds..."
-            
+
             logging.info(f"Map loading error created: {map_name}")
+
+        # Detect "Client X is not active" errors when follow command fails
+        client_not_active_match = re.match(r"Client (\d+) is not active", line)
+        if client_not_active_match:
+            player_id = int(client_not_active_match.group(1))
+            logging.warning(f"Follow command failed for player {player_id} - player not active yet")
+            # Track this failed attempt to prevent retry loops
+            if hasattr(serverstate, 'FAILED_FOLLOW_ATTEMPTS'):
+                serverstate.FAILED_FOLLOW_ATTEMPTS[player_id] = time.time()
+                logging.info(f"Added player {player_id} to failed follow cooldown list")
 
         if line in {"VoteVote passed.", "RE_Shutdown( 0 )"}:
             if not serverstate.PAUSE_STATE:

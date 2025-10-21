@@ -56,6 +56,10 @@ STATE_PAUSED_COUNTER = 0
 LAST_PAUSE_LOG_TIME = 0
 PAUSE_LOG_INTERVAL = 10  # Log every 10 pauses or every 30 seconds
 
+# Track failed follow attempts to prevent infinite retry loops
+FAILED_FOLLOW_ATTEMPTS = {}  # {player_id: timestamp} - track when follow commands fail
+FAILED_FOLLOW_COOLDOWN = 10  # Retry after 10 seconds
+
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
     "^2Hello ^7there! ^3Us ^2{count} ^7arrived to watch you play ^3defrag^7! ^1:)",
@@ -597,6 +601,23 @@ class State:
             self.spec_ids.remove(self.bot_id)
         # remove afk players from speccable id list
         [self.spec_ids.remove(afk_id) for afk_id in self.afk_ids if afk_id in self.spec_ids]
+
+        # Remove players with recent failed follow attempts (cooldown period)
+        global FAILED_FOLLOW_ATTEMPTS, FAILED_FOLLOW_COOLDOWN
+        current_time = time.time()
+        players_to_remove = []
+        for player_id, fail_time in list(FAILED_FOLLOW_ATTEMPTS.items()):
+            # If cooldown has expired, remove from failed list and allow retrying
+            if current_time - fail_time > FAILED_FOLLOW_COOLDOWN:
+                del FAILED_FOLLOW_ATTEMPTS[player_id]
+                logging.info(f"Cooldown expired for player {player_id} - can retry spectating")
+            # If still in cooldown and player is in spec_ids, remove them temporarily
+            elif player_id in self.spec_ids:
+                players_to_remove.append(player_id)
+
+        if players_to_remove:
+            [self.spec_ids.remove(pid) for pid in players_to_remove]
+            logging.info(f"Temporarily excluded players with failed follow attempts: {players_to_remove}")
 
         # Build a compact snapshot of the spectate-related state and only log when it changes
         try:
