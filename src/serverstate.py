@@ -51,6 +51,11 @@ LAST_RECOVERY_TIME = 0
 RECOVERY_COOLDOWN = 15  # 15 seconds between recovery attempts
 RECOVERY_TIMEOUT_ACTIVE = False  # Prevent multiple timeout threads
 
+# State paused logging throttle
+STATE_PAUSED_COUNTER = 0
+LAST_PAUSE_LOG_TIME = 0
+PAUSE_LOG_INTERVAL = 10  # Log every 10 pauses or every 30 seconds
+
 # Auto greeting messages with Twitch viewer count integration
 GREETING_MESSAGES = [
     "^2Hello ^7there! ^3Us ^2{count} ^7arrived to watch you play ^3defrag^7! ^1:)",
@@ -794,7 +799,22 @@ def start():
                     STATE.handle_vote()
         except Exception as e:
             if e.args[0] == 'Paused':
-                logging.info("State paused.")
+                global STATE_PAUSED_COUNTER, LAST_PAUSE_LOG_TIME
+
+                # Increment counter
+                STATE_PAUSED_COUNTER += 1
+                current_time = time.time()
+                time_since_last_log = current_time - LAST_PAUSE_LOG_TIME if LAST_PAUSE_LOG_TIME > 0 else 0
+
+                # Log every 10 pauses, or force a log if 30+ seconds passed (heartbeat)
+                is_interval = STATE_PAUSED_COUNTER % PAUSE_LOG_INTERVAL == 0
+                is_heartbeat = time_since_last_log >= 30
+
+                if is_interval or is_heartbeat:
+                    heartbeat_marker = " [heartbeat]" if is_heartbeat and not is_interval else ""
+                    logging.info(f"State paused ({STATE_PAUSED_COUNTER} checks){heartbeat_marker}")
+                    LAST_PAUSE_LOG_TIME = current_time
+
                 # state_paused_timer += 1
 
                 # if state_paused_timer > 60:
@@ -1493,6 +1513,7 @@ def attempt_state_resume():
     This checks if the connection actually worked but we just got stuck
     """
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME
+    global STATE_PAUSED_COUNTER, LAST_PAUSE_LOG_TIME
     
     try:
         logging.info("Attempting to resume normal state...")
@@ -1509,9 +1530,11 @@ def attempt_state_resume():
             
             if server_info and players:
                 logging.info("State resume successful - connection was actually working!")
-                
+
                 # Resume normal operation
                 PAUSE_STATE = False
+                STATE_PAUSED_COUNTER = 0
+                LAST_PAUSE_LOG_TIME = 0
                 CONNECTING = False
                 CONNECTION_START_TIME = None
                 

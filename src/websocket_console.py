@@ -477,12 +477,14 @@ def notify_serverstate_change():
     # Increment counter
     SERVERSTATE_CHANGE_COUNTER += 1
     current_time = time.time()
-    time_since_last_log = current_time - LAST_SERVERSTATE_LOG_TIME
+    time_since_last_log = current_time - LAST_SERVERSTATE_LOG_TIME if LAST_SERVERSTATE_LOG_TIME > 0 else 0
 
-    # Log every 10 changes OR every 30 seconds (whichever comes first)
-    should_log = (SERVERSTATE_CHANGE_COUNTER % SERVERSTATE_LOG_INTERVAL == 0) or (time_since_last_log >= 30)
+    # Log every 10 changes, but also force a log if 30+ seconds passed (heartbeat)
+    is_interval = SERVERSTATE_CHANGE_COUNTER % SERVERSTATE_LOG_INTERVAL == 0
+    is_heartbeat = time_since_last_log >= 30
 
-    if should_log:
+    # Only log if it's the interval OR heartbeat (but reset counter on heartbeat to avoid double-log)
+    if is_interval or is_heartbeat:
         # Show what changed in a concise way
         change_info = []
         if serverstate.STATE:
@@ -494,7 +496,8 @@ def notify_serverstate_change():
                     change_info.append(f"watching {player.n}")
 
         info_str = f" ({', '.join(change_info)})" if change_info else ""
-        logging.info(f"[Serverstate] {SERVERSTATE_CHANGE_COUNTER} updates processed{info_str}")
+        heartbeat_marker = " [heartbeat]" if is_heartbeat and not is_interval else ""
+        logging.info(f"[Serverstate] {SERVERSTATE_CHANGE_COUNTER} updates{heartbeat_marker}{info_str}")
         LAST_SERVERSTATE_LOG_TIME = current_time
 
 def handle_ws_command(msg):
