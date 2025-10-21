@@ -611,16 +611,24 @@ class State:
             [self.spec_ids.remove(pid) for pid in perm_excluded]
             logging.info(f"Permanently excluded players (too many failures): {perm_excluded}")
 
+        # Clear failure count for player we're successfully spectating
+        global FAILED_FOLLOW_ATTEMPTS
+        if self.current_player_id != self.bot_id and self.current_player_id in FAILED_FOLLOW_ATTEMPTS:
+            # We're successfully spectating this player, clear their failure history
+            del FAILED_FOLLOW_ATTEMPTS[self.current_player_id]
+            logging.info(f"Successfully spectating player {self.current_player_id} - cleared failure count")
+
         # Remove players with recent failed follow attempts (cooldown period)
-        global FAILED_FOLLOW_ATTEMPTS, FAILED_FOLLOW_COOLDOWN
+        global FAILED_FOLLOW_COOLDOWN
         current_time = time.time()
         players_to_remove = []
         for player_id, fail_data in list(FAILED_FOLLOW_ATTEMPTS.items()):
             fail_time = fail_data['timestamp']
-            # If cooldown has expired, remove from failed list and allow retrying
+            # If cooldown has expired, allow retrying BUT KEEP the failure count
             if current_time - fail_time > FAILED_FOLLOW_COOLDOWN:
-                del FAILED_FOLLOW_ATTEMPTS[player_id]
-                logging.info(f"Cooldown expired for player {player_id} - can retry spectating (attempt {fail_data['count'] + 1})")
+                # Don't delete - just don't exclude them from spec_ids
+                # The count will persist so next failure increments properly
+                pass
             # If still in cooldown and player is in spec_ids, remove them temporarily
             elif player_id in self.spec_ids:
                 players_to_remove.append(player_id)
@@ -1266,10 +1274,8 @@ def validate_state():
             STATE.idle_counter = 0  # Reset idle strike flag since a followable non-bot id was found.
             STATE.afk_counter = 0
 
-            # If this player was previously in failed/excluded lists, clear them since we're attempting to spectate
+            # Clear permanent exclusion to allow retry, but keep failure count to track consecutive failures
             global FAILED_FOLLOW_ATTEMPTS, PERMANENTLY_EXCLUDED
-            if follow_id in FAILED_FOLLOW_ATTEMPTS:
-                del FAILED_FOLLOW_ATTEMPTS[follow_id]
             if follow_id in PERMANENTLY_EXCLUDED:
                 PERMANENTLY_EXCLUDED.discard(follow_id)
                 logging.info(f"Removed player {follow_id} from permanent exclusion list - retrying spectate")
