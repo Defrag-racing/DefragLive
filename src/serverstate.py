@@ -798,6 +798,17 @@ def start():
                     # Given that a new report exists, read this new data.
                     server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
 
+                    # If get_svinfo_report returned None, wait and request a fresh report
+                    if not bool(server_info):
+                        logging.warning("get_svinfo_report returned None - waiting 2s and requesting fresh report")
+                        time.sleep(2)
+                        api.exec_command("silent svinfo_report serverstate.txt", verbose=False)
+                        time.sleep(1)
+                        server_info, players, num_players = get_svinfo_report(config.STATE_REPORT_P)
+                        if not bool(server_info):
+                            logging.error("get_svinfo_report failed again after retry - skipping this cycle")
+                            continue
+
                     # Validate: if player count drops drastically, likely corrupt read - wait and retry
                     if bool(server_info) and STATE is not None and num_players is not None:
                         if STATE.num_players is not None and STATE.num_players > 5:
