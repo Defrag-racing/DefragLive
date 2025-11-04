@@ -969,7 +969,7 @@ def initialize_state(force=False):
                 logging.warning("TEAM DEBUG: Could not find bot in updated player list after team switch")
 
         # Handle nospec notifications
-        for nospecid in STATE.nospec_ids:
+        for nospecid in (STATE.nospec_ids or []):
             if nospecid in STATE.nopmids:
                 # Send one-time message to nospecpm players
                 api.exec_command('tell ' + str(nospecid) + ' ^7nospec active, ^3defraglive ^7cant spectate.')
