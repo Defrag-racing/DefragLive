@@ -32,6 +32,9 @@ DELAYED_MESSAGE_QUEUE = []
 MAP_ERROR_COUNTDOWN_ACTIVE = False
 SENT_MESSAGE_IDS = set()
 WEBSOCKET_LAST_HEALTHY = time.time()  # Track websocket health
+UNKNOWN_CMD_COUNT = 0  # Track consecutive "Unknown command" lines (crashed cgame)
+UNKNOWN_CMD_RECOVERY_TRIGGERED = False  # Prevent multiple recovery triggers
+CONNECTION_HANDLED_TIME = 0  # Timestamp of last connection completion handling (prevent duplicates)
 
 ERROR_FILTERS = {
     "ERROR: CL_ParseServerMessage:": "RECONNECT",
@@ -424,7 +427,9 @@ def process_line(line):
     if hasattr(serverstate, 'CONNECTION_START_TIME') and serverstate.CONNECTION_START_TIME:
         total_stuck_time = time.time() - serverstate.CONNECTION_START_TIME
         if total_stuck_time > 120:  # 2 minutes absolute timeout
-            logging.error(f"ABSOLUTE TIMEOUT: Bot stuck for {total_stuck_time}s")
+            # Reset CONNECTION_START_TIME immediately to prevent firing on every console line
+            serverstate.CONNECTION_START_TIME = None
+            logging.error(f"ABSOLUTE TIMEOUT: Bot stuck for {total_stuck_time:.0f}s - triggering recovery")
             try:
                 serverstate.force_connection_recovery("Absolute timeout exceeded")
             except Exception as e:
@@ -549,6 +554,22 @@ def process_line(line):
                 logging.info(f"Previous line: {PREVIOUS_LINE}")
                 handle_error_with_delay(line, ERROR_FILTERS[line])
 
+        # Detect crashed cgame state: "Unknown command varmath/svinfo_report" spam
+        global UNKNOWN_CMD_COUNT, UNKNOWN_CMD_RECOVERY_TRIGGERED
+        if 'Unknown command "varmath' in line or 'Unknown command "svinfo_report' in line:
+            UNKNOWN_CMD_COUNT += 1
+            if UNKNOWN_CMD_COUNT >= 10 and not UNKNOWN_CMD_RECOVERY_TRIGGERED:
+                UNKNOWN_CMD_RECOVERY_TRIGGERED = True
+                logging.critical(f"CRASHED CGAME DETECTED: {UNKNOWN_CMD_COUNT} consecutive 'Unknown command' lines - cgame is unloaded")
+                logging.critical("Triggering smart recovery for crashed cgame...")
+                serverstate.RECOVERY_ATTEMPTS = 1  # Skip state resume, go to reconnect
+                serverstate.smart_connection_recovery("Crashed cgame - Unknown command spam detected")
+        else:
+            # Reset counter on any non-Unknown-command line
+            if UNKNOWN_CMD_COUNT > 0:
+                UNKNOWN_CMD_COUNT = 0
+                UNKNOWN_CMD_RECOVERY_TRIGGERED = False
+
         if 'broke the server record with' in line and is_server_msg(line, 'broke the server record with'):
             # Extract player name and time from the server record message
             try:
@@ -620,7 +641,7 @@ def process_line(line):
         if serverstate.CONNECTING:
             logging.info(f"[DEBUG] CONNECTING=True, checking line: {line}")
 
-        if (line.startswith('Not recording a demo.') or 
+        if (line.startswith('Not recording a demo.') or
             line.startswith("report written to system/reports/initialstate.txt") or
             line.startswith("Sound memory manager started") or
             line.startswith("CL_InitCGame:") or
@@ -628,14 +649,36 @@ def process_line(line):
             "GL_RENDERER:" in line or
             "MODE: -1," in line or
             # ADD THIS NEW CONDITION - detect when bot enters game during connection
-            (line.endswith(" entered the game.") and serverstate.CONNECTING and 
+            (line.endswith(" entered the game.") and serverstate.CONNECTING and
              ("DefragLive" in line or "LIVE" in line))):
-            
+
             # Add this debug line as the FIRST line inside the if block
             logging.info(f"[DEBUG] Connection detection triggered by: {line}")
-            
+
+            # GUARD: Prevent duplicate connection completion handling during console backlog bursts
+            # If we already handled a connection completion within the last 10 seconds, skip
+            global CONNECTION_HANDLED_TIME
+            time_since_last_handle = time.time() - CONNECTION_HANDLED_TIME
+            if time_since_last_handle < 10:
+                logging.info(f"[DEBUG] Skipping duplicate connection detection (last handled {time_since_last_handle:.1f}s ago)")
+                # Still need to handle basic pause/unpause if not a duplicate connection
+                pass  # Fall through to the else block below (PAUSE_STATE check)
+            else:
+                # Not a duplicate - handle normally
+                pass  # Fall through to the priority checks below
+
             # PRIORITY ORDER: Check most specific conditions first
-            if serverstate.VID_RESTARTING:
+            if time_since_last_handle < 10 and not serverstate.VID_RESTARTING:
+                # Duplicate detection during backlog - only handle basic PAUSE_STATE
+                if serverstate.PAUSE_STATE and not serverstate.CONNECTING and not serverstate.VID_RESTARTING:
+                    # This is likely a map change completion during a burst - just unpause
+                    time.sleep(1)
+                    serverstate.PAUSE_STATE = False
+                    PAUSE_STATE_START_TIME = None
+                    logging.info("Game loaded (during burst). Continuing state.")
+                # Skip spawning any threads for duplicate detections
+                pass
+            elif serverstate.VID_RESTARTING:
                 # VID_RESTART completion - HIGHEST PRIORITY
                 time.sleep(2)
                 logging.info("vid_restart done.")
@@ -655,7 +698,10 @@ def process_line(line):
                 def delayed_vid_restart_sync():
                     import time
                     import websocket_console
-                    time.sleep(2)
+                    time.sleep(4)  # Longer delay to let game stabilize
+                    if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+                        logging.info("Skipping settings sync - state changed during delay")
+                        return
                     try:
                         websocket_console.sync_current_settings_to_vps()
                         logging.info("Synced settings to VPS after vid_restart")
@@ -669,59 +715,69 @@ def process_line(line):
                 
             elif serverstate.CONNECTING:
                 # Connection completion - SECOND PRIORITY
+                CONNECTION_HANDLED_TIME = time.time()  # Mark this connection as handled
                 time.sleep(2)
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
-                serverstate.CONNECTION_START_TIME = None  # ADD THIS LINE
+                serverstate.CONNECTION_START_TIME = None
                 logging.info("Connection complete. Continuing state.")
-                
+
                 logging.info(f"DEBUG: About to process queued settings. Queue size: {len(websocket_console.SETTINGS_QUEUE)}")
-                
+
                 if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
                     serverstate.reset_recovery_state()
                     logging.info("Connection successful - recovery state cleared")
-                
+
                 # GREETING LOGIC - triggered when connection actually completes
                 logging.info(f"[GREETING DEBUG] Connection complete - LAST_GREETING_SERVER: {serverstate.LAST_GREETING_SERVER}")
                 logging.info(f"[GREETING DEBUG] Connection complete - CURRENT_IP: {serverstate.CURRENT_IP}")
-                
+
                 if serverstate.CURRENT_IP and serverstate.CURRENT_IP != serverstate.LAST_GREETING_SERVER:
                     serverstate.LAST_GREETING_SERVER = serverstate.CURRENT_IP
                     logging.info(f"[GREETING DEBUG] Scheduling greeting for {serverstate.CURRENT_IP}")
-                    
+
                     def delayed_nationality_greeting():
                         import time
-                        time.sleep(5)
+                        time.sleep(8)  # Longer delay to let game fully stabilize
+                        # Re-check that we're still on the same server and not paused
+                        if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+                            logging.info("[GREETING] Skipping greeting - state changed during delay")
+                            return
                         logging.info(f"[GREETING DEBUG] Executing greeting for {serverstate.CURRENT_IP}")
                         serverstate.send_nationality_greeting(serverstate.CURRENT_IP)
-                    
+
                     import threading
                     greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
                     greeting_thread.start()
-                
+
                 PAUSE_STATE_START_TIME = None
-                
+
                 # FORCE STATE INITIALIZATION after connection
                 def delayed_state_init():
                     import time
-                    time.sleep(3)  # Wait for connection to fully establish
+                    time.sleep(5)  # Longer delay - wait for game to fully stabilize
+                    # Re-check that we're not in a crash/reload cycle
+                    if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+                        logging.info("Skipping delayed state init - state changed during delay")
+                        return
                     logging.info("Forcing state initialization after connection")
                     api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
                     serverstate.initialize_state(True)
-                
+
                 import threading
                 init_thread = threading.Thread(target=delayed_state_init, daemon=True)
                 init_thread.start()
                 
             elif serverstate.PAUSE_STATE:
                 # Game restart completion - THIRD PRIORITY
+                CONNECTION_HANDLED_TIME = time.time()  # Mark as handled
                 # Wait a bit longer to catch immediate crashes after CL_InitCGame
                 time.sleep(2)
-                
+
                 # Double-check for immediate crashes after CL_InitCGame
                 if any(crash_indicator in line for crash_indicator in [
-                    "ACCESS_VIOLATION", 
-                    "Exception Code:", 
+                    "ACCESS_VIOLATION",
+                    "Exception Code:",
                     "Signal caught",
                     "forcefully unloading cgame vm",
                     "ERROR: Unhandled exception caught"
@@ -729,21 +785,25 @@ def process_line(line):
                     logging.info("Immediate crash detected after CL_InitCGame - keeping pause state and triggering recovery")
                     # Don't unpause, let the crash handler deal with it
                     return
-                
+
                 serverstate.PAUSE_STATE = False
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()
                 PAUSE_STATE_START_TIME = None
-                
+
                 if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
                     serverstate.reset_recovery_state()
                     logging.info("Connection successful - recovery state cleared")
-                
+
                 # SYNC SETTINGS AFTER GAME RESTART
                 def delayed_game_restart_sync():
                     import time
                     import websocket_console
-                    time.sleep(2)
+                    time.sleep(4)  # Longer delay to let game stabilize
+                    # Re-check state before sending commands
+                    if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+                        logging.info("Skipping settings sync - state changed during delay")
+                        return
                     try:
                         websocket_console.sync_current_settings_to_vps()
                         logging.info("Synced settings to VPS after game restart")

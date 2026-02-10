@@ -63,106 +63,316 @@ MAX_FOLLOW_FAILURES = 3  # Give up after 3 consecutive failures
 PERMANENTLY_EXCLUDED = set()  # Player IDs that failed too many times
 
 # Auto greeting messages with Twitch viewer count integration
+# Colors: ^1=Red ^2=Green ^3=Yellow ^4=Blue ^5=Cyan ^7=White
 GREETING_MESSAGES = [
-    "^2Hello ^7there! ^3Us ^2{count} ^7arrived to watch you play ^3defrag^7! ^1:)",
-    "^3Hi ^7everyone! ^2{count} ^7viewers just joined to see some ^3sick runs^7! ^2:)",
-    "^5Greetings ^7fraggers! ^3{count} ^7people are now watching your ^2amazing skills^7!",
-    "^4Hey ^7there! ^2{count} ^7viewers just tuned in to watch some ^3defrag action^7! ^1:)",
-    "^1Welcome ^7warriors! ^2{count} ^7defrag fans just dropped in to watch the ^3magic happen^7! ^5:)",
-    "^4Ayy ^7there! ^3{count} ^7viewers just connected to witness some ^2legendary movement^7!",
-    "^6Bonjour ^7speed demons! ^2{count} ^7people are here for the ^3ultimate defrag experience^7! ^1:)",
-    "^2Greetings ^7and salutations! ^3{count} ^7viewers joined the ^2defrag party^7! ^4Let's gooo!",
-    "^5What's crackin' ^7legends! ^2{count} ^7people tuned in for some ^3insane trick jumps^7!",
-    "^1Hola ^7amigos! ^3{count} ^7viewers are ready to see you ^2demolish these records^7! ^6:P",
-    "^4Wassup ^7chat! ^2{count} ^7defrag enthusiasts just arrived for the ^3show of shows^7!",
-    "^3Konnichiwa ^7runners! ^2{count} ^7viewers joined to watch some ^1sick strafe action^7! ^5:)",
-    "^6Ahoy ^7there! ^3{count} ^7people sailed in to see you ^2navigate these maps perfectly^7!",
-    "^2Namaste ^7fraggers! ^1{count} ^7souls gathered to witness your ^3transcendent movement^7!",
-    "^5Howdy ^7partners! ^3{count} ^7viewers just rode into town for some ^2wild defrag action^7! ^4:)",
-    "^1Guten Tag ^7speedsters! ^2{count} ^7viewers arrived to see some ^3precision platforming^7!",
-    "^4Shalom ^7legends! ^3{count} ^7people are here to watch you ^2break the laws of physics^7! ^6:)",
-    "^2Zdravstvuyte ^7comrades! ^1{count} ^7viewers joined for some ^3communist strafe jumping^7! ^5:P",
-    "^6Ni hao ^7masters! ^3{count} ^7viewers came to learn from your ^2ancient defrag wisdom^7!",
-    "^5Sup ^7kings and queens! ^2{count} ^7royal subjects arrived to watch your ^3majestic runs^7! ^1:)",
-    "^4Yo ^7yo ^7yo! ^3{count} ^7hype beasts just rolled up for the ^2sickest movement tech^7! ^6:)",
-    "^1Heeeey ^7there! ^2{count} ^7awesome humans joined to see you ^3absolutely destroy these maps^7!",
-    "^3What's good ^7gamers! ^1{count} ^7viewers are locked and loaded for some ^2epic defrag moments^7!",
-    "^6Greetings ^7earthlings! ^3{count} ^7beings from across the galaxy came to see you ^2defy gravity^7! ^4:P",
-    "^2Salve ^7gladiators! ^1{count} ^7spectators entered the arena to watch you ^3conquer these challenges^7!",
-    "^5Hello ^7hello ^7hello! ^3{count} ^7beautiful people joined the ^2defrag family reunion^7! ^6:)",
-    "^4Top of the morning! ^2{count} ^7early birds flew in to catch the ^3defrag worm^7! ^1:)",
-    "^1Buongiorno ^7artists! ^3{count} ^7viewers came to admire your ^2movement masterpieces^7! ^5:)",
-    "^6What's shakin' ^7bacon! ^2{count} ^7hungry viewers arrived for some ^3tasty trick jumps^7! ^4:P",
-    "^3Rise and grind ^7champions! ^1{count} ^7motivated viewers joined your ^2training montage^7! ^6:)",
-    "^5Peek-a-boo! ^7^2{count} ^7sneaky viewers just appeared to watch you ^3vanish through these maps^7! ^1:)",
-    "^4Yooooo ^7what's poppin'! ^3{count} ^7cool cats slid in to see some ^2smooth operator moves^7! ^6:P",
-    "^2Beep beep! ^7^1{count} ^7speed demons just drove by to see you ^3burn rubber on these maps^7! ^5:)",
-    "^6Ready, set, GO! ^3{count} ^7racers joined the starting line to watch you ^2break land speed records^7! ^4:)",
-    "^6What's up ^7gamers! ^3{count} ^7people arrived to see you ^2dominate ^7these maps!",
-    "^1Yo ^7yo ^7yo! ^2{count} ^7viewers just showed up for the ^3defrag show^7! ^4:P",
-    "^3Sup ^7legends! ^2{count} ^7people are here to witness your ^3epic runs^7!",
-    "^5Hello ^7hello! ^3{count} ^7viewers joined the party to watch some ^2quality defrag^7!",
-    "^4Howdy ^7there! ^2{count} ^7people just arrived to see you ^3shred ^7these maps! ^1:)",
-    "^6G'day ^7mate! ^3{count} ^7viewers are here to watch some ^2sick movement^7!",
-    "^2Hiya ^7everyone! ^3{count} ^7people joined to see you ^2crush ^7those times!",
-    "^1What's good ^7fam! ^2{count} ^7viewers are ready for some ^3insane defrag action^7!",
-    "^4Salutations ^7runners! ^3{count} ^7people are here to watch you ^2fly ^7through these maps!",
-    "^5Hey ^7hey ^7hey! ^2{count} ^7viewers just dropped in to see some ^3mad skills^7! ^4:)",
-    "^6Aloha ^7fraggers! ^3{count} ^7people are here to witness your ^2legendary runs^7!"
+    # --- Friendly & clean ---
+    "^2Hey ^7everyone! ^3{count} ^7viewers tuned in to watch some ^5defrag^7. Enjoy the runs!",
+    "^5Hello ^7there! ^3{count} ^7watching live. Let's see some ^2clean strafes^7!",
+    "^3{count} ^7viewers just connected. Welcome to ^5DeFrag.LIVE^7!",
+    "^2Welcome! ^3{count} ^7people watching. Time for some ^5smooth movement^7.",
+    "^5Hey! ^3{count} ^7viewers here for some ^2defrag^7. Sit back and enjoy!",
+    "^2Hi ^7everyone! ^3{count} ^7viewers watching ^5defrag ^7right now.",
+    "^3{count} ^7viewers online. Welcome to the ^5defrag stream^7!",
+    "^5Hello! ^3{count} ^7people watching some ^2movement art^7.",
+    "^2Hey ^7all! ^3{count} ^7tuned in for some ^5strafejumping^7.",
+    "^5Welcome! ^3{count} ^7viewers. Enjoy the ^2defrag^7!",
+    # --- Movement themed ---
+    "^3{count} ^7viewers watching. Let's see some ^5circle jumps ^7and ^2fast times^7!",
+    "^2Hello! ^3{count} ^7viewers here for the ^5speed^7. No brakes, only ^2strafes^7.",
+    "^5Hi! ^3{count} ^7watching. Hope you're ready for some ^2world-class movement^7.",
+    "^3{count} ^7viewers just arrived. Time to watch some ^5precision strafing^7!",
+    "^2Welcome ^7to the stream! ^3{count} ^7people here for ^5trick jumps ^7and ^2fast runs^7.",
+    "^5Hello! ^3{count} ^7viewers. Nothing but ^2pure movement ^7ahead.",
+    "^3{count} ^7watching live. Let the ^5strafejumping ^7begin!",
+    "^2Hey! ^3{count} ^7viewers ready for some ^5overbounces ^7and ^2record times^7.",
+    "^5Welcome! ^3{count} ^7viewers here to see some ^2insane air control^7.",
+    "^2Hi ^7there! ^3{count} ^7watching. Every ^5frame ^7counts in ^2defrag^7!",
+    # --- Community vibes ---
+    "^5Hello ^7defraggers! ^3{count} ^7viewers watching the action.",
+    "^2Hey! ^3{count} ^7people in chat. Welcome to ^5DeFrag.LIVE^7!",
+    "^3{count} ^7viewers tuned in. Good to have you here!",
+    "^5Hi ^7everyone! ^3{count} ^7watching. The ^2defrag community ^7says hello!",
+    "^2Welcome! ^3{count} ^7viewers joined. Pull up a seat and enjoy the ^5runs^7.",
+    "^3{count} ^7viewers here. ^2Good times ^7and ^5fast times ^7ahead!",
+    "^5Hello! ^3{count} ^7viewers watching ^2live defrag^7. Welcome!",
+    "^2Hey! ^3{count} ^7people here. Nothing like ^5watching defrag ^7together.",
+    "^5Hi! ^3{count} ^7viewers. Let's see what this player can do!",
+    "^3{count} ^7people watching. ^2Welcome ^7to ^5DeFrag.LIVE^7!",
+    # --- Short & punchy ---
+    "^3{count} ^7watching. ^2Let's go^7!",
+    "^5Hello! ^3{count} ^7viewers, ^2welcome^7!",
+    "^3{count} ^7people live. ^5Defrag ^7time!",
+    "^2Hey! ^3{count} ^7viewers. Enjoy the ^5show^7!",
+    "^3{count} ^7tuned in. ^2Welcome ^7all!",
+    "^5Hi! ^3{count} ^7watching ^2defrag ^7live.",
+    "^3{count} ^7viewers, ^2good to see you^7!",
+    "^2Hello! ^3{count} ^7here. ^5Enjoy^7!",
+    "^3{count} ^7live. Welcome to ^5defrag^7!",
+    "^5Hey! ^3{count} ^7viewers. ^2Let's watch^7!",
+    # --- Map/record themed ---
+    "^3{count} ^7viewers here. Let's see if we catch a ^2new record^7!",
+    "^5Hello! ^3{count} ^7watching. ^2Records ^7are made to be ^5broken^7.",
+    "^3{count} ^7people tuned in. Every ^5millisecond ^7matters in ^2defrag^7!",
+    "^2Welcome! ^3{count} ^7viewers. Chasing ^5times ^7one ^2strafe ^7at a time.",
+    "^5Hi! ^3{count} ^7watching. Let's see some ^2personal bests ^7today!",
+    "^3{count} ^7viewers. ^5Defrag ^7is all about that ^2perfect line^7.",
+    "^2Hello! ^3{count} ^7people here for the grind. ^5Every run ^7gets closer!",
+    "^3{count} ^7watching. ^2Patience ^7and ^5precision ^7make the ^2record^7.",
+    "^5Welcome! ^3{count} ^7viewers. The ^2finish line ^7is waiting.",
+    "^3{count} ^7tuned in. Nothing but ^5pure speed ^7and ^2skill^7.",
 ]
 
 # Nationality-specific greetings
+# Colors: ^1=Red ^2=Green ^3=Yellow ^4=Blue ^5=Cyan ^7=White
 NATIONALITY_GREETINGS = {
     'DE': [
-        "^2Guten Tag ^7everyone! ^3{count} ^7viewers joined to see some ^2German engineering ^7in defrag! ^1:)",
-        "^4Hallo ^7fraggers! ^2{count} ^7people are here to witness some ^3Deutsch precision^7!",
-        "^5Servus ^7speed demons! ^3{count} ^7viewers came for the ^2legendary German efficiency^7! ^4:P"
+        "^3{count} ^7viewers here. ^2Hallo ^7an die ^5deutschen Defraggers^7!",
+        "^2Moin! ^3{count} ^7Zuschauer. ^5Deutsche Präzision ^7incoming!",
+        "^5Servus! ^3{count} ^7watching. ^2German efficiency ^7at its finest.",
+        "^2Hallo ^7zusammen! ^3{count} ^7viewers watching some ^5deutsche Strafes^7!",
+        "^3{count} ^7tuned in. ^2Guten Tag ^7and welcome to ^5defrag^7!",
+        "^5Hi! ^3{count} ^7viewers. ^2German ^7precision meets ^5Quake movement^7.",
     ],
     'RU': [
-        "^1Privet ^7comrades! ^2{count} ^7viewers arrived for some ^3Russian strafe mastery^7! ^5:)",
-        "^3Zdravstvuyte ^7legends! ^1{count} ^7people joined to see ^2Eastern European excellence^7!",
-        "^6Da da da! ^7^3{count} ^7viewers are here for some ^4Soviet-level movement^7! ^2:P"
+        "^3{count} ^7viewers here. ^1Privet ^7to the ^5Russian defraggers^7!",
+        "^1Zdravstvuyte! ^3{count} ^7watching. ^5Russian strafing ^7at its best.",
+        "^3{count} ^7tuned in. ^1Privet! ^7Let's see some ^5CIS movement^7.",
+        "^5Hello! ^3{count} ^7viewers. ^1Russian ^7defrag players always ^2deliver^7.",
+        "^3{count} ^7watching. ^1Privet ^7vsem! ^5Defrag ^7time.",
+        "^1Zdorovo! ^3{count} ^7people here for some ^5world-class Russian strafing^7.",
     ],
     'FR': [
-        "^5Bonjour ^7mes amis! ^2{count} ^7viewers joined for some ^3French finesse^7! ^4:)",
-        "^1Salut ^7fraggers! ^3{count} ^7people are here to see ^2Gallic grace ^7in motion!",
-        "^4Bonsoir ^7speed artists! ^2{count} ^7viewers came for ^6French flair^7! ^3:P"
+        "^3{count} ^7viewers here. ^4Bonjour ^7les ^5defraggers francais^7!",
+        "^4Salut! ^3{count} ^7watching. ^5French finesse ^7on display!",
+        "^3{count} ^7tuned in. ^4Bonjour! ^7Some ^5elegant movement ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^4French ^7style meets ^5defrag precision^7.",
+        "^3{count} ^7watching. ^4Salut ^7tout le monde! ^5Defrag ^7time.",
+        "^4Bonsoir! ^3{count} ^7people here for some ^5smooth French strafes^7.",
     ],
     'US': [
-        "^1Howdy ^7y'all! ^3{count} ^7viewers just rolled up for some ^2American awesomeness^7! ^4:)",
-        "^2What's up ^7USA! ^1{count} ^7people joined for some ^3Stars and Stripes strafing^7!",
-        "^6Hey there ^7Americans! ^2{count} ^7viewers are here for that ^4freedom movement^7! ^5:P"
+        "^3{count} ^7viewers here. ^1Hey ^7to the ^4American ^5defraggers^7!",
+        "^1Hello ^7USA! ^3{count} ^7watching some ^5quality defrag^7.",
+        "^3{count} ^7tuned in. What's up ^4America^7, welcome to ^5defrag^7!",
+        "^5Hi! ^3{count} ^7viewers. ^1US ^7defrag scene representing!",
+        "^3{count} ^7watching. ^1Hey ^7from across the pond! ^5Enjoy the runs^7.",
+        "^1Welcome! ^3{count} ^7people here. ^4American ^5movement ^7incoming.",
     ],
     'PL': [
-        "^4Cześć ^7Polish legends! ^2{count} ^7viewers joined for some ^3Slavic supremacy^7! ^1:)",
-        "^6Witajcie ^7speed demons! ^3{count} ^7people are here for ^2Polish power^7!",
-        "^1Siema ^7fraggers! ^2{count} ^7viewers came to witness ^5Polish perfection^7! ^4:P"
+        "^3{count} ^7viewers here. ^1Czesc ^7polscy ^5defraggers^7!",
+        "^1Siema! ^3{count} ^7watching. ^5Polish movement ^7is something else.",
+        "^3{count} ^7tuned in. ^1Witajcie! ^7Time for some ^5Polish strafes^7.",
+        "^5Hello! ^3{count} ^7viewers. ^1Poland ^7always brings ^2solid runs^7!",
+        "^3{count} ^7watching. ^1Hej! ^7Polska defrag na ^5najwyzszym poziomie^7.",
+        "^1Elo! ^3{count} ^7people here for some ^5world-class Polish movement^7.",
     ],
     'SE': [
-        "^3Hej ^7Swedish vikings! ^2{count} ^7viewers sailed in for ^1Nordic navigation^7! ^5:)",
-        "^6Tjena ^7Scandinavian speedsters! ^3{count} ^7people joined for ^4Swedish smoothness^7!",
-        "^2Hallå ^7ice kings! ^1{count} ^7viewers are here for ^6Nordic excellence^7! ^4:P"
+        "^3{count} ^7viewers here. ^3Hej ^7to the ^5Swedish defraggers^7!",
+        "^3Tjena! ^3{count} ^7watching. ^5Nordic precision ^7at work.",
+        "^3{count} ^7tuned in. ^3Hallå! ^7Some ^5Scandinavian strafes ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^3Swedish ^7movement is always ^2clean^7.",
+        "^3{count} ^7watching. ^3Hej ^7allihopa! Welcome to ^5defrag^7!",
+        "^3Tja! ^3{count} ^7people here for some ^5Swedish defrag quality^7.",
     ],
     'GB': [
-        "^5Cheerio ^7British legends! ^2{count} ^7viewers joined for some ^3proper English movement^7! ^1:)",
-        "^4Blimey ^7UK fraggers! ^3{count} ^7people are here for ^6British brilliance^7!",
-        "^1Oi oi ^7speed merchants! ^2{count} ^7viewers came for ^4Queen's English strafing^7! ^5:P"
+        "^3{count} ^7viewers here. ^5Hello ^7to the ^5British defraggers^7!",
+        "^5Cheers! ^3{count} ^7watching some ^2proper defrag^7.",
+        "^3{count} ^7tuned in. ^5Hello ^7UK! Time for some ^2quality movement^7.",
+        "^2Hi! ^3{count} ^7viewers. ^5British ^7precision on display!",
+        "^3{count} ^7watching. ^5Alright ^7lads, welcome to ^2defrag^7!",
+        "^5Evening! ^3{count} ^7people here for some ^2solid British strafes^7.",
     ],
     'NL': [
-        "^6Hallo ^7Dutch masters! ^3{count} ^7viewers joined for some ^2Netherlands navigation^7! ^4:)",
-        "^2Gezellig ^7Orange army! ^1{count} ^7people are here for ^5Dutch dynamics^7!",
-        "^4Goedendag ^7fraggers! ^2{count} ^7viewers came for ^3Holland highlights^7! ^6:P"
+        "^3{count} ^7viewers here. ^2Hallo ^7to the ^5Dutch defraggers^7!",
+        "^2Hoi! ^3{count} ^7watching. ^5Netherlands movement ^7incoming!",
+        "^3{count} ^7tuned in. ^2Goedendag! ^7Some ^5Dutch strafes ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^2Dutch ^7defrag is always ^5gezellig^7!",
+        "^3{count} ^7watching. ^2Hey ^7Nederland! Welcome to ^5defrag^7!",
+        "^2Hoi hoi! ^3{count} ^7people here for some ^5quality Dutch runs^7.",
     ],
     'FI': [
-        "^1Hei ^7Finnish fighters! ^3{count} ^7viewers joined for some ^2Nordic navigation^7! ^5:)",
-        "^5Terve ^7Suomi speedsters! ^2{count} ^7people came for ^4Finnish finesse^7!",
-        "^3Moi ^7ice warriors! ^1{count} ^7viewers are here for ^6Arctic excellence^7! ^4:P"
+        "^3{count} ^7viewers here. ^5Moi ^7to the ^2Finnish defraggers^7!",
+        "^5Terve! ^3{count} ^7watching. ^2Finnish ^7defrag never disappoints.",
+        "^3{count} ^7tuned in. ^5Hei! ^7Finland representing in ^2defrag^7!",
+        "^2Hello! ^3{count} ^7viewers. ^5Suomi ^7brings the ^2precision^7!",
+        "^3{count} ^7watching. ^5Moi ^7kaikille! Time for ^2defrag^7!",
+        "^5Hei! ^3{count} ^7people here for some ^2Finnish movement mastery^7.",
     ],
     'NO': [
-        "^4Hei ^7Norwegian vikings! ^2{count} ^7viewers sailed in for ^3fjord-level movement^7! ^1:)",
-        "^6Takk ^7Nordic legends! ^3{count} ^7people joined for ^5Norwegian navigation^7!",
-        "^2Hyggelig ^7speed demons! ^1{count} ^7viewers are here for ^4Viking velocity^7! ^5:P"
-    ]
+        "^3{count} ^7viewers here. ^1Hei ^7to the ^5Norwegian defraggers^7!",
+        "^1Hallo! ^3{count} ^7watching. ^5Nordic ^7strafing at its finest.",
+        "^3{count} ^7tuned in. ^1Hei! ^7Norway in ^5defrag ^7is always good.",
+        "^5Hello! ^3{count} ^7viewers. ^1Norwegian ^7precision on ^5full display^7!",
+        "^3{count} ^7watching. ^1Hei ^7alle sammen! ^5Defrag ^7time.",
+        "^1God dag! ^3{count} ^7people here for some ^5Norwegian movement^7.",
+    ],
+    'CZ': [
+        "^3{count} ^7viewers here. ^1Ahoj ^7to the ^4Czech defraggers^7!",
+        "^1Cau! ^3{count} ^7watching. ^4Ceska ^5defrag ^7scena v akci!",
+        "^3{count} ^7tuned in. ^1Nazdar! ^7Czech Republic in ^5defrag^7!",
+        "^5Hello! ^3{count} ^7viewers. ^1Cesky ^7defrag je ^2top^7!",
+        "^3{count} ^7watching. ^1Ahoj ^7vsichni! Welcome to ^5defrag^7!",
+        "^1Zdar! ^3{count} ^7people here for some ^4Czech strafejumping^7.",
+    ],
+    'SK': [
+        "^3{count} ^7viewers here. ^4Ahoj ^7to the ^5Slovak defraggers^7!",
+        "^4Cau! ^3{count} ^7watching. ^5Slovakia ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^4Nazdar! ^7Some ^5Slovak movement ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^4Slovak ^7precision on display!",
+        "^3{count} ^7watching. ^4Ahoj ^7vsetci! ^5Defrag ^7time.",
+        "^4Zdar! ^3{count} ^7people here for ^5quality Slovak runs^7.",
+    ],
+    'UA': [
+        "^3{count} ^7viewers here. ^3Pryvit ^7to the ^4Ukrainian defraggers^7!",
+        "^3Zdorovenko! ^3{count} ^7watching. ^4Ukraine ^7delivers ^5great movement^7!",
+        "^3{count} ^7tuned in. ^3Pryvit! ^7Ukrainian ^5strafes ^7incoming.",
+        "^5Hello! ^3{count} ^7viewers. ^3Ukrainian ^7defrag always ^2impresses^7!",
+        "^3{count} ^7watching. ^3Pryvit ^7vsim! ^5Defrag ^7time.",
+        "^3Zdrastuy! ^3{count} ^7people here for ^4Ukrainian defrag skills^7.",
+    ],
+    'BR': [
+        "^3{count} ^7viewers here. ^2Opa ^7to the ^3Brazilian defraggers^7!",
+        "^2E ai! ^3{count} ^7watching. ^3Brazil ^7bringing the ^5movement^7!",
+        "^3{count} ^7tuned in. ^2Ola! ^7Brazilian ^5defrag ^7on display.",
+        "^5Hello! ^3{count} ^7viewers. ^2BR ^7defrag is always ^3exciting^7!",
+        "^3{count} ^7watching. ^2Fala ^7galera! Welcome to ^5defrag^7!",
+        "^2Salve! ^3{count} ^7people here for some ^3Brazilian strafes^7.",
+    ],
+    'AU': [
+        "^3{count} ^7viewers here. ^2G'day ^7to the ^5Aussie defraggers^7!",
+        "^2Hey mate! ^3{count} ^7watching. ^5Australian movement ^7incoming!",
+        "^3{count} ^7tuned in. ^2G'day! ^7Aussie ^5defrag ^7represent!",
+        "^5Hello! ^3{count} ^7viewers. ^2Australia ^7in ^5defrag ^7mode.",
+        "^3{count} ^7watching. ^2Oi ^7oi! Welcome to ^5defrag ^7from down under!",
+    ],
+    'CA': [
+        "^3{count} ^7viewers here. ^1Hey ^7to the ^5Canadian defraggers^7!",
+        "^1Hello ^7Canada! ^3{count} ^7watching some ^5quality defrag^7.",
+        "^3{count} ^7tuned in. ^1Hey! ^7Canadian ^5movement ^7on display.",
+        "^5Hello! ^3{count} ^7viewers. ^1Canada ^7always brings ^2clean runs^7!",
+        "^3{count} ^7watching. Welcome from the ^1Great White North^7! ^5Defrag ^7time.",
+    ],
+    'IT': [
+        "^3{count} ^7viewers here. ^2Ciao ^7to the ^5Italian defraggers^7!",
+        "^2Ciao! ^3{count} ^7watching. ^5Italian style ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^2Salve! ^7Italian ^5finesse ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^2Italy ^7makes ^5defrag ^7look good.",
+        "^3{count} ^7watching. ^2Ciao ^7a tutti! ^5Defrag ^7time.",
+    ],
+    'ES': [
+        "^3{count} ^7viewers here. ^1Hola ^7to the ^3Spanish defraggers^7!",
+        "^1Buenas! ^3{count} ^7watching. ^3Spanish ^5movement ^7incoming!",
+        "^3{count} ^7tuned in. ^1Hola! ^7Spain representing in ^5defrag^7!",
+        "^5Hello! ^3{count} ^7viewers. ^1Espana ^7brings ^3solid strafes^7!",
+        "^3{count} ^7watching. ^1Que tal^7! Welcome to ^5defrag^7!",
+    ],
+    'DK': [
+        "^3{count} ^7viewers here. ^1Hej ^7to the ^5Danish defraggers^7!",
+        "^1Hej! ^3{count} ^7watching. ^5Danish precision ^7on display!",
+        "^3{count} ^7tuned in. ^1Goddag! ^7Denmark in ^5defrag^7!",
+        "^5Hello! ^3{count} ^7viewers. ^1Danish ^7movement is always ^2sharp^7.",
+        "^3{count} ^7watching. ^1Hej ^7allesammen! ^5Defrag ^7time.",
+    ],
+    'BE': [
+        "^3{count} ^7viewers here. ^3Hallo ^7to the ^5Belgian defraggers^7!",
+        "^3Salut! ^3{count} ^7watching. ^5Belgium ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^3Hey! ^7Belgian ^5strafes ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^3Belgium ^7bringing some ^2clean runs^7!",
+    ],
+    'AT': [
+        "^3{count} ^7viewers here. ^1Servus ^7to the ^5Austrian defraggers^7!",
+        "^1Gruss Gott! ^3{count} ^7watching. ^5Austrian ^7precision incoming!",
+        "^3{count} ^7tuned in. ^1Servus! ^7Austria in ^5defrag^7!",
+        "^5Hello! ^3{count} ^7viewers. ^1Austrian ^7movement is ^2always clean^7.",
+    ],
+    'CH': [
+        "^3{count} ^7viewers here. ^1Grüezi ^7to the ^5Swiss defraggers^7!",
+        "^1Hoi! ^3{count} ^7watching. ^5Swiss precision ^7at work!",
+        "^3{count} ^7tuned in. ^1Sali! ^7Switzerland in ^5defrag^7!",
+        "^5Hello! ^3{count} ^7viewers. ^1Swiss ^2accuracy ^7on full display.",
+    ],
+    'PT': [
+        "^3{count} ^7viewers here. ^2Ola ^7to the ^5Portuguese defraggers^7!",
+        "^2Ola! ^3{count} ^7watching. ^5Portugal ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^2Boas! ^7Portuguese ^5movement ^7ahead.",
+        "^5Hello! ^3{count} ^7viewers. ^2Portugal ^7brings ^5smooth strafes^7!",
+    ],
+    'HU': [
+        "^3{count} ^7viewers here. ^1Szia ^7to the ^2Hungarian defraggers^7!",
+        "^1Helló! ^3{count} ^7watching. ^2Hungary ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^1Sziasztok! ^7Hungarian ^5strafes ^7incoming.",
+        "^5Hello! ^3{count} ^7viewers. ^1Hungarian ^7movement ^2never disappoints^7.",
+    ],
+    'RO': [
+        "^3{count} ^7viewers here. ^3Salut ^7to the ^4Romanian defraggers^7!",
+        "^3Buna! ^3{count} ^7watching. ^4Romania ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^3Salut! ^7Romanian ^5movement ^7on display.",
+        "^5Hello! ^3{count} ^7viewers. ^4Romania ^7bringing ^2solid runs^7!",
+    ],
+    'BG': [
+        "^3{count} ^7viewers here. ^2Zdravei ^7to the ^5Bulgarian defraggers^7!",
+        "^2Zdrasti! ^3{count} ^7watching. ^5Bulgaria ^7in defrag!",
+        "^3{count} ^7tuned in. ^2Zdraveite! ^7Bulgarian ^5strafes ^7ahead.",
+    ],
+    'HR': [
+        "^3{count} ^7viewers here. ^1Bok ^7to the ^4Croatian defraggers^7!",
+        "^1Bok! ^3{count} ^7watching. ^4Croatia ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^1Pozdrav! ^7Croatian ^5movement ^7incoming.",
+    ],
+    'RS': [
+        "^3{count} ^7viewers here. ^4Zdravo ^7to the ^1Serbian defraggers^7!",
+        "^4Cao! ^3{count} ^7watching. ^1Serbia ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^4Zdravo! ^7Serbian ^5strafes ^7ahead.",
+    ],
+    'EE': [
+        "^3{count} ^7viewers here. ^4Tere ^7to the ^5Estonian defraggers^7!",
+        "^4Tere! ^3{count} ^7watching. ^5Estonia ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^4Hei! ^7Estonian ^5movement ^7on display.",
+    ],
+    'LV': [
+        "^3{count} ^7viewers here. ^1Sveiki ^7to the ^5Latvian defraggers^7!",
+        "^1Čau! ^3{count} ^7watching. ^5Latvia ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^1Sveiki! ^7Latvian ^5strafes ^7ahead.",
+    ],
+    'LT': [
+        "^3{count} ^7viewers here. ^3Labas ^7to the ^2Lithuanian defraggers^7!",
+        "^3Sveiki! ^3{count} ^7watching. ^2Lithuania ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^3Labas! ^7Lithuanian ^5movement ^7incoming.",
+    ],
+    'JP': [
+        "^3{count} ^7viewers here. ^1Konnichiwa ^7to the ^5Japanese defraggers^7!",
+        "^1Yo! ^3{count} ^7watching. ^5Japanese ^7precision in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^1Konnichiwa! ^7Japan brings ^5clean movement^7.",
+    ],
+    'KR': [
+        "^3{count} ^7viewers here. ^4Annyeong ^7to the ^5Korean defraggers^7!",
+        "^4Annyeong! ^3{count} ^7watching. ^5Korean ^7precision in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^4Bangapseumnida! ^7Korea in ^5defrag^7!",
+    ],
+    'CN': [
+        "^3{count} ^7viewers here. ^1Ni hao ^7to the ^3Chinese defraggers^7!",
+        "^1Ni hao! ^3{count} ^7watching. ^3China ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^1Ni hao! ^7Chinese ^5movement ^7on display.",
+    ],
+    'GR': [
+        "^3{count} ^7viewers here. ^4Geia ^7to the ^5Greek defraggers^7!",
+        "^4Geia sou! ^3{count} ^7watching. ^5Greece ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^4Geia! ^7Greek ^5strafes ^7ahead.",
+    ],
+    'TR': [
+        "^3{count} ^7viewers here. ^1Merhaba ^7to the ^5Turkish defraggers^7!",
+        "^1Selam! ^3{count} ^7watching. ^5Turkey ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^1Merhaba! ^7Turkish ^5movement ^7incoming.",
+    ],
+    'IL': [
+        "^3{count} ^7viewers here. ^4Shalom ^7to the ^5Israeli defraggers^7!",
+        "^4Ahalan! ^3{count} ^7watching. ^5Israel ^7in ^2defrag^7!",
+        "^3{count} ^7tuned in. ^4Shalom! ^7Israeli ^5strafes ^7on display.",
+    ],
+    'BY': [
+        "^3{count} ^7viewers here. ^1Pryvitanne ^7to the ^2Belarusian defraggers^7!",
+        "^1Zdorov! ^3{count} ^7watching. ^2Belarus ^7in ^5defrag^7!",
+        "^3{count} ^7tuned in. ^1Vitaju! ^7Belarusian ^5movement ^7ahead.",
+    ],
 }
 
 # Keep last spectate snapshot to avoid spamming identical logs every serverstate change
@@ -259,58 +469,63 @@ def send_nationality_greeting(server_ip):
         send_auto_greeting()
 
 # World record celebration messages
+# Color scheme: ^1 red = record/emphasis, ^3 yellow = highlights, ^2 green = positive, ^5 cyan = defrag terms, ^7 white = base
 WORLD_RECORD_MESSAGES = [
-    "^1HOLY MOLY! ^7We just witnessed ^3HISTORY ^7being made! ^2What a legendary run! ^5:))",
-    "^2INCREDIBLE! ^7That was absolutely ^3PHENOMENAL^7! ^1World record SMASHED! ^4:)",
-    "^3WOW WOW WOW! ^7^2{count} ^7viewers just saw something ^1EXTRAORDINARY^7! ^6AMAZING!",
-    "^4UNBELIEVABLE! ^7That was ^3PURE MAGIC^7! ^2History books will remember this moment! ^5:P",
-    "^5MIND = BLOWN! ^7We are ^3BLESSED ^7to witness such ^2INCREDIBLE skill^7! ^1:))",
-    "^6SPEECHLESS! ^7That run was ^3ABSOLUTELY PERFECT^7! ^4World record DESTROYED! ^2:)",
-    "^1GOOSEBUMPS! ^7What a ^3MASTERPIECE ^7of movement! ^5Truly witnessing greatness! ^6:))",
-    "^2LEGENDARY! ^7That was ^3POETRY IN MOTION^7! ^1The stars aligned for this run! ^4:P",
-    "^3CHILLS EVERYWHERE! ^7We just saw the ^2IMPOSSIBLE ^7become possible! ^5EPIC! ^1:)",
-    "^4HISTORY MADE! ^7That run will be talked about for ^3YEARS TO COME^7! ^6BRILLIANT! ^2:))",
-    "^5PERFECTION! ^7Every single movement was ^3FLAWLESS^7! ^1Absolutely STUNNING! ^4:)",
-    "^6WORLD CLASS! ^7That wasn't just a run, that was ^3ART^7! ^2PHENOMENAL performance! ^5:P",
-    "^1MAGICAL! ^7The universe conspired to create this ^3PERFECT MOMENT^7! ^6AMAZING! ^4:))",
-    "^2TRANSCENDENT! ^7We witnessed something ^3BEYOND HUMAN^7! ^5Absolutely MAGNIFICENT! ^1:)",
-    "^3SUBLIME! ^7That run had everything - ^2skill, precision, and HEART^7! ^4INCREDIBLE! ^6:P",
-    "^1INSANE! ^7That movement was ^3OUT OF THIS WORLD^7! ^2Absolutely MINDBLOWING! ^5:D",
-    "^2EPIC WIN! ^7We just witnessed ^3DEFRAG PERFECTION^7! ^4LEGENDARY status achieved! ^6:P",
-    "^3BONKERS! ^7That was ^1COMPLETELY MENTAL^7! ^5The physics gods smiled today! ^2:))",
-    "^4GODLIKE! ^7Movement like that is ^3ONCE IN A LIFETIME^7! ^6SPECTACULAR! ^1:D",
-    "^5UNTOUCHABLE! ^7That run was ^2ABSOLUTE PERFECTION^7! ^3Nobody else even comes close! ^4:)",
-    "^6FLAWLESS VICTORY! ^7Every single pixel was ^1PERFECTLY CALCULATED^7! ^2GENIUS! ^5:P",
-    "^1NEXT LEVEL! ^7That wasn't just fast, that was ^3TRANSCENDENT^7! ^4UNREAL! ^6:))",
-    "^2PURE EXCELLENCE! ^7Movement so smooth it looked ^3EFFORTLESS^7! ^5MASTERFUL! ^1:D",
-    "^3MIND-MELTING! ^7We just saw the ^4IMPOSSIBLE^7 become reality! ^6EXTRAORDINARY! ^2:P",
-    "^4BREATHTAKING! ^7That run left everyone ^1ABSOLUTELY STUNNED^7! ^3PHENOMENAL! ^5:)",
-    "^5GAME CHANGER! ^7Movement like that ^2REDEFINES THE POSSIBLE^7! ^6INCREDIBLE! ^1:D",
-    "^6OTHERWORLDLY! ^7That wasn't human, that was ^3PURE ARTISTRY^7! ^4MAGNIFICENT! ^2:))",
-    "^1DEMOLITION! ^7The previous record got ^5COMPLETELY OBLITERATED^7! ^3SAVAGE! ^6:P",
-    "^2UNSTOPPABLE! ^7Movement so clean it looked ^4COMPUTER-GENERATED^7! ^1PERFECT! ^5:D",
-    "^3LEGENDARY STATUS! ^7That run will be remembered ^2FOREVER^7! ^6HISTORIC! ^4:)",
-    "^4REALITY BENDING! ^7Physics laws were ^1COMPLETELY IGNORED^7! ^3SUPERNATURAL! ^2:P",
-    "^5MASTERPIECE! ^7Every strafe was ^6PIXEL-PERFECT^7! ^4ARTISTIC BRILLIANCE! ^1:D",
-    "^6GODMODE ACTIVATED! ^7That movement was ^3ABSOLUTELY DIVINE^7! ^5CELESTIAL! ^2:))",
-    "^1NUCLEAR! ^7That run just ^4EXPLODED^7 the leaderboards! ^3DEVASTATING! ^6:P",
-    "^2UNTAMED! ^7Raw skill like that is ^5COMPLETELY WILD^7! ^1FEROCIOUS! ^4:D",
-    "^3SILKY SMOOTH! ^7Movement so fluid it was ^6HYPNOTIC^7! ^2MESMERIZING! ^5:)",
-    "^4STRATOSPHERIC! ^7That performance was ^1SKY-HIGH^7 quality! ^3ASTRONOMICAL! ^6:P",
-    "^5FLAWLESS EXECUTION! ^7Not a single wasted movement! ^2CLINICAL PRECISION! ^4:D",
-    "^6MIND-BOGGLING! ^7Speed and accuracy beyond ^3HUMAN COMPREHENSION^7! ^1SURREAL! ^5:)",
-    "^1RECORD ANNIHILATION! ^7The old time got ^4COMPLETELY VAPORIZED^7! ^6RUTHLESS! ^2:P",
-    "^2PURE VELOCITY! ^7Movement so fast it ^5BROKE THE SOUND BARRIER^7! ^3SONIC! ^4:D",
-    "^3SURGICAL PRECISION! ^7Every angle calculated to ^1MATHEMATICAL PERFECTION^7! ^6GENIUS! ^5:)",
-    "^4LIGHTNING STRIKE! ^7That run hit with ^2ELECTRIFYING SPEED^7! ^3THUNDEROUS! ^1:P",
-    "^5DEFRAG DEITY! ^7Movement blessed by the ^6STRAFE JUMPING GODS^7! ^4DIVINE! ^2:D",
-    "^6REALITY CHECK! ^7What we just saw ^1SHOULDN'T BE POSSIBLE^7! ^5MIRACULOUS! ^3:)",
-    "^1ABSOLUTE MADNESS! ^7That level of skill is ^4COMPLETELY INSANE^7! ^2BONKERS! ^6:P",
-    "^2MOVEMENT POETRY! ^7Every strafe told a ^3BEAUTIFUL STORY^7! ^5ARTISTIC! ^1:D",
-    "^3SPEED DEMON! ^7That runner just ^6POSSESSED^7 the map! ^4SUPERNATURAL! ^2:)",
-    "^4PERFECTION ACHIEVED! ^7The ^1ULTIMATE RUN^7 has been witnessed! ^5FLAWLESS! ^3:P",
-    "^5LEGENDARY BEAST! ^7Movement so wild it ^2TAMED THE IMPOSSIBLE^7! ^6UNTAMED! ^4:D",
-    "^6QUANTUM LEAP! ^7That run just ^3TELEPORTED^7 into the history books! ^1FUTURISTIC! ^5:)"
+    # --- Record broken / time beaten ---
+    "^1NEW SERVER RECORD! ^7That ^5run ^7was absolutely ^3clean^7. Respect.",
+    "^1RECORD BROKEN! ^7Another time falls. ^5Defrag ^7never stops evolving.",
+    "^1SERVER RECORD! ^7The old time didn't stand a chance. ^2Well played.",
+    "^1NEW RECORD! ^7That ^5movement ^7was on another level. ^3GG.",
+    "^1RECORD SMASHED! ^7Clean ^5strafes^7, perfect ^5timing^7. ^2What a run.",
+    "^1SERVER RECORD! ^7Absolutely ^3surgical ^7precision. That was textbook.",
+    "^1NEW RECORD! ^7Every ^5circle jump ^7was dialed in. ^2Incredible.",
+    "^1RECORD BEATEN! ^7Flawless execution from start to finish. ^3Wow.",
+    "^1SERVER RECORD! ^7That ^5line ^7was pure efficiency. ^2Not a frame wasted.",
+    "^1NEW RECORD! ^7The ^5movement ^7spoke for itself. ^3Legendary.",
+    # --- Praise the run quality ---
+    "^7That run was ^3something else^7. ^1New server record. ^5gg",
+    "^7Clean. Fast. ^1Record. ^7Nothing else to say.",
+    "^7Strafes on point, ^5angles ^7perfect. ^1New record ^7earned.",
+    "^7Every ^5jump ^7connected perfectly. ^1Server record ^7broken.",
+    "^7That ^5speed ^7was unreal. ^1Record falls ^7once again.",
+    "^7When ^5movement ^7looks this easy, you know it's ^1record ^7pace.",
+    "^7Pure ^5defrag ^7mastery on display. ^1New server record.",
+    "^7You could feel that ^1record ^7coming. ^3Perfect execution.",
+    "^7That ^5run ^7was cleaner than a ^3fresh install^7. ^1Record broken.",
+    "^7Physics engine working overtime on that one. ^1New record.",
+    # --- Community / hype ---
+    "^3{count} ^7viewers just witnessed a ^1server record^7. What a time to be watching.",
+    "^3{count} ^7people saw that ^1record ^7fall live. ^5Defrag ^7delivers.",
+    "^7Everyone watching just caught a ^1record-breaking ^7run. ^2Nice.",
+    "^7The stream doesn't miss. ^1New server record ^7just dropped.",
+    "^7Caught live on ^5DeFrag.LIVE^7 - ^1server record ^7shattered.",
+    "^7That's why we watch. ^1Record ^7broken in real time. ^2Incredible.",
+    "^7Live ^5defrag ^7at its finest. ^1New server record.",
+    "^3{count} ^7viewers, one ^1record^7. This is what it's all about.",
+    # --- Short and punchy ---
+    "^1Record. ^7Done. ^2gg.",
+    "^1New server record. ^7That was ^3sick.",
+    "^7And just like that - ^1new record.",
+    "^7There it is. ^1Server record ^7broken.",
+    "^1Record down. ^7Clean as always.",
+    "^7That time? ^1Gone. ^7New ^1record ^7set.",
+    "^1SR broken. ^7What a ^5run.",
+    "^7Another day, another ^1record.",
+    # --- Defrag-specific praise ---
+    "^7Those ^5strafes ^7were frame-perfect. ^1New server record.",
+    "^7The ^5air control ^7on that run was insane. ^1Record broken.",
+    "^7^5Circle jump ^7into the history books. ^1New server record.",
+    "^7Peak ^5strafe jumping^7. ^1Server record ^7earned, not given.",
+    "^7That ^5line ^7through the map was art. ^1New record.",
+    "^7Textbook ^5movement^7, record ^3time^7. ^1Server record.",
+    "^7^5Overbounce^7? Nah, pure skill. ^1Record broken.",
+    "^7Not a single ^5strafe ^7wasted. ^1New server record. ^2gg",
+    "^7The ^5speed ^7was relentless. ^1Record time ^7achieved.",
+    "^7Perfect ^5weapon timing^7, perfect ^5movement^7. ^1Record.",
+    "^7That ^5rampslide ^7was butter. ^1New server record.",
+    "^7^5Plasma climb ^7into a ^1record^7. Beautiful.",
+    "^7The ^5rocket jump ^7transitions were flawless. ^1Record.",
+    "^7^5Grenade boost ^7perfectly timed. ^1Server record ^7falls.",
 ]
 
 # Rate limiting for world records
@@ -932,7 +1147,7 @@ def initialize_state(force=False):
                 # Retry a connection to best server
                 new_ip = servers.get_next_active_server(IGNORE_IPS)
                 logging.info("[SERVERSTATE] Connecting Now : " + str(new_ip))
-                connect(new_ip)
+                enhanced_connect(new_ip)
 
         bot_id = bot_player[0].id  # Find our own ID
 
@@ -1054,7 +1269,7 @@ def standby_mode_finished():
         return
 
     logging.info("[SERVERSTATE] Connecting Now : " + str(new_server))
-    connect(new_server)
+    enhanced_connect(new_server)
 
 
 def validate_state():
@@ -1412,7 +1627,7 @@ def validate_state():
                 logging.info(f"Next active server found: {new_ip}")
 
                 if bool(new_ip):
-                    connect(new_ip)
+                    enhanced_connect(new_ip)
                     return
                 else:  # No ip left to connect to, go on standby mode.
                     api.exec_command("map st1")
@@ -1533,6 +1748,10 @@ def connect(ip, caller=None):
     global AFK_COUNTDOWN_ACTIVE
     global AFK_HELP_THREADS
     global LAST_GREETING_SERVER
+
+    # Reset console connection guard so new connection detection isn't blocked
+    import console
+    console.CONNECTION_HANDLED_TIME = 0
 
     # ABORT ALL AFK COUNTDOWNS AND HELP MESSAGES IMMEDIATELY
     AFK_COUNTDOWN_ACTIVE = False  # This will stop any running countdown threads
@@ -1867,6 +2086,10 @@ def enhanced_connect(ip, caller=None):
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, CURRENT_IP
     global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS, RECOVERY_IN_PROGRESS
     global STATE_INITIALIZED, RECONNECTED_CHECK
+
+    # Reset console connection guard so new connection detection isn't blocked
+    import console
+    console.CONNECTION_HANDLED_TIME = 0
 
     # Reset recovery state for new connections
     if ip != CURRENT_IP:
@@ -2206,7 +2429,7 @@ def send_world_record_celebration(player_name=None, record_time=None):
         api.exec_command(f"say {celebration_message}")
         
         # Also send a display message for extra emphasis (NO PLAYER NAME OR TIME)
-        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD BROKEN! ^7Epic performance witnessed!")
+        api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD BROKEN")
         
         # Send notification to Twitch chat via websocket (NO PLAYER NAME OR TIME)
         try:
@@ -2214,7 +2437,7 @@ def send_world_record_celebration(player_name=None, record_time=None):
             import json
             wr_notification = {
                 'action': 'server_record_celebration',
-                'message': f"SERVER RECORD BROKEN! The chat is going absolutely wild!"
+                'message': f"SERVER RECORD BROKEN! Caught live on DeFrag.LIVE"
             }
             console.WS_Q.put(json.dumps(wr_notification))
         except Exception as e:

@@ -259,9 +259,11 @@ if __name__ == "__main__":
 
     def add_periodic_health_check():
         last_api_success = time.time()
+        pause_watchdog_start = None  # Independent pause tracking
 
         def health_check_worker():
-            nonlocal last_api_success
+            nonlocal last_api_success, pause_watchdog_start
+            logging.info("WATCHDOG: Pause watchdog initialized")
             while True:
                 time.sleep(30)  # Check every 30 seconds
 
@@ -314,19 +316,34 @@ if __name__ == "__main__":
                         except Exception as e:
                             logging.critical(f"HEALTH CHECK: Emergency reset failed: {e}")
 
-                # Check for general pause deadlock
-                if (hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE and
-                    hasattr(console, 'PAUSE_STATE_START_TIME') and console.PAUSE_STATE_START_TIME):
-
-                    pause_stuck_time = current_time - console.PAUSE_STATE_START_TIME
-                    if pause_stuck_time > 120:  # 2 minutes
-                        logging.critical(f"HEALTH CHECK: Pause deadlock detected ({pause_stuck_time:.0f}s)")
-                        try:
-                            serverstate.PAUSE_STATE = False
-                            api.exec_command("map st1")
-                            logging.critical("HEALTH CHECK: Forced pause reset")
-                        except Exception as e:
-                            logging.critical(f"HEALTH CHECK: Pause reset failed: {e}")
+                # Check for general pause deadlock (independent watchdog)
+                if hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE:
+                    if pause_watchdog_start is None:
+                        pause_watchdog_start = current_time
+                        logging.info(f"WATCHDOG: Pause detected, starting timer")
+                    else:
+                        pause_duration = current_time - pause_watchdog_start
+                        if pause_duration > 120:  # 2 minutes
+                            logging.critical(f"WATCHDOG: Pause timeout ({pause_duration:.0f}s) - forcing recovery")
+                            try:
+                                serverstate.PAUSE_STATE = False
+                                serverstate.CONNECTING = False
+                                serverstate.CONNECTION_START_TIME = None
+                                if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
+                                    serverstate.reset_recovery_state()
+                                api.exec_command("map st1")
+                                logging.critical("WATCHDOG: Forced pause reset via map st1")
+                                pause_watchdog_start = None
+                                # Start standby mode to search for new servers
+                                standby_thread = threading.Thread(target=serverstate.standby_mode_started, daemon=True)
+                                standby_thread.start()
+                                logging.critical("WATCHDOG: Started standby mode to find new server")
+                            except Exception as e:
+                                logging.critical(f"WATCHDOG: Pause reset failed: {e}")
+                else:
+                    if pause_watchdog_start is not None:
+                        logging.info(f"WATCHDOG: Pause ended, timer reset")
+                        pause_watchdog_start = None
 
         health_thread = threading.Thread(target=health_check_worker, daemon=True)
         health_thread.start()

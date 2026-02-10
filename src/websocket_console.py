@@ -669,7 +669,7 @@ def handle_ws_command(msg):
         time.sleep(2)
 
         serverstate.RECONNECTED_CHECK = True
-        serverstate.connect(ip, author)
+        serverstate.enhanced_connect(ip, author)
         # Optionally send success back to extension
         console.WS_Q.put(json.dumps({
             'action': 'connect_success',

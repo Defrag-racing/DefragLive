@@ -61,14 +61,14 @@ async def connect(ctx, author, args):
 
     serverstate.RECONNECTED_CHECK = True
 
-    serverstate.connect(ip, author)
+    serverstate.enhanced_connect(ip, author)
 
 
 async def restart(ctx, author, args):
     serverstate.IGNORE_IPS = []
     connect_ip = servers.get_most_popular_server()
     serverstate.RECONNECTED_CHECK = True
-    serverstate.connect(connect_ip)
+    serverstate.enhanced_connect(connect_ip)
 
 
 async def reconnect(ctx, author, args):
