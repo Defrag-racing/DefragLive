@@ -30,6 +30,7 @@ LAST_ERROR_TIME = None
 PAUSE_STATE_START_TIME = None  # Add this global variable
 DELAYED_MESSAGE_QUEUE = []
 MAP_ERROR_COUNTDOWN_ACTIVE = False
+MAP_ERROR_VID_RESTARTED_FOR = None  # Track map name we already tried vid_restart for
 SENT_MESSAGE_IDS = set()
 WEBSOCKET_LAST_HEALTHY = time.time()  # Track websocket health
 UNKNOWN_CMD_COUNT = 0  # Track consecutive "Unknown command" lines (crashed cgame)
@@ -103,24 +104,26 @@ SYSTEM_MESSAGE_PATTERNS = [
     "test: okay"
 ]
 
-def handle_map_error_with_countdown():
+def handle_map_error_with_countdown(map_name=None):
     """
-    Handle map loading error with 60-second countdown and auto-reconnect
+    Handle map loading error with 60-second countdown.
+    First attempt: vid_restart to refresh map list, then reconnect.
+    If same map fails again: skip to different server.
     """
-    global MAP_ERROR_COUNTDOWN_ACTIVE, DELAYED_MESSAGE_QUEUE
-    
+    global MAP_ERROR_COUNTDOWN_ACTIVE, MAP_ERROR_VID_RESTARTED_FOR, DELAYED_MESSAGE_QUEUE
+
     if MAP_ERROR_COUNTDOWN_ACTIVE:
         return  # Already running countdown
-    
+
     MAP_ERROR_COUNTDOWN_ACTIVE = True
-    logging.info("Map loading error detected. Starting 60-second countdown...")
-    
+    already_tried_vid_restart = (map_name and map_name == MAP_ERROR_VID_RESTARTED_FOR)
+    logging.info(f"Map loading error detected (map={map_name}). vid_restart already tried: {already_tried_vid_restart}. Starting 60-second countdown...")
+
     def countdown_and_reconnect():
-        global MAP_ERROR_COUNTDOWN_ACTIVE, DELAYED_MESSAGE_QUEUE
-        
+        global MAP_ERROR_COUNTDOWN_ACTIVE, MAP_ERROR_VID_RESTARTED_FOR, DELAYED_MESSAGE_QUEUE
+
         try:
             for seconds_left in range(60, 0, -5):  # Count down from 60 in 5-second intervals
-                # Create countdown message and add to delayed queue
                 countdown_msg = {
                     'id': message_to_id(f"MAP_COUNTDOWN_{seconds_left}_{time.time()}"),
                     'type': 'MAP_COUNTDOWN',
@@ -129,39 +132,62 @@ def handle_map_error_with_countdown():
                     'timestamp': time.time(),
                     'command': None
                 }
-                
-                # Add to delayed queue for immediate processing
+
                 DELAYED_MESSAGE_QUEUE.append({
                     'message': countdown_msg,
-                    'send_time': time.time()  # Send immediately
+                    'send_time': time.time()
                 })
-                
+
                 logging.info(f"Map error countdown: {seconds_left} seconds remaining")
                 time.sleep(5)
-            
-            # Final reconnect message
+
             final_msg = {
                 'id': message_to_id(f"MAP_COUNTDOWN_FINAL_{time.time()}"),
-                'type': 'MAP_COUNTDOWN', 
+                'type': 'MAP_COUNTDOWN',
                 'author': None,
                 'content': f"^3Reconnecting now...",
                 'timestamp': time.time(),
                 'command': None
             }
-            
+
             DELAYED_MESSAGE_QUEUE.append({
                 'message': final_msg,
                 'send_time': time.time()
             })
-            
-            logging.info("Map error countdown complete. Using smart recovery...")
-            
-            # Wait a moment then use smart recovery
-            time.sleep(2)
-            
-            # Use smart recovery instead of direct reconnect
-            serverstate.smart_connection_recovery("Map loading error countdown completed")
-                
+
+            if already_tried_vid_restart:
+                # vid_restart already failed for this map - skip to different server
+                logging.warning(f"Map '{map_name}' still missing after vid_restart. Moving to different server...")
+                MAP_ERROR_VID_RESTARTED_FOR = None
+                serverstate.smart_connection_recovery("Map still missing after vid_restart")
+            else:
+                # First attempt: vid_restart to refresh map list, then reconnect
+                logging.info("Map error countdown complete. Running vid_restart to refresh map list...")
+                MAP_ERROR_VID_RESTARTED_FOR = map_name
+
+                serverstate.VID_RESTARTING = True
+                serverstate.PAUSE_STATE = True
+                api.exec_command("vid_restart")
+
+                # Wait for vid_restart to complete (console.py clears VID_RESTARTING flag)
+                vid_wait_start = time.time()
+                while serverstate.VID_RESTARTING and time.time() - vid_wait_start < 30:
+                    time.sleep(1)
+
+                if serverstate.VID_RESTARTING:
+                    logging.warning("vid_restart did not complete within 30s, forcing continuation")
+                    serverstate.VID_RESTARTING = False
+                    serverstate.PAUSE_STATE = False
+
+                # Now reconnect - map list should be refreshed
+                time.sleep(2)
+                if serverstate.CURRENT_IP:
+                    logging.info(f"Reconnecting to {serverstate.CURRENT_IP} after vid_restart...")
+                    serverstate.enhanced_connect(serverstate.CURRENT_IP)
+                else:
+                    logging.info("No current IP after vid_restart, using smart recovery...")
+                    serverstate.smart_connection_recovery("Map loading error after vid_restart")
+
         except Exception as e:
             logging.error(f"Error during map error countdown: {e}")
             serverstate.smart_connection_recovery("Map error countdown failed")
@@ -227,7 +253,9 @@ def handle_error_with_delay(error_line, error_action):
     
     if error_action == "MAP_ERROR":
         logging.info(f"Map loading error detected: {error_line}")
-        handle_map_error_with_countdown()
+        map_name_match = re.search(r"couldn't load maps/(.+?)\.bsp", error_line)
+        failed_map = map_name_match.group(1) if map_name_match else None
+        handle_map_error_with_countdown(map_name=failed_map)
         return
         
     if error_action == "RECONNECT":
@@ -720,6 +748,7 @@ def process_line(line):
                 serverstate.CONNECTING = False
                 serverstate.PAUSE_STATE = False
                 serverstate.CONNECTION_START_TIME = None
+                MAP_ERROR_VID_RESTARTED_FOR = None  # Reset map error tracking on successful connection
                 logging.info("Connection complete. Continuing state.")
 
                 logging.info(f"DEBUG: About to process queued settings. Queue size: {len(websocket_console.SETTINGS_QUEUE)}")
@@ -756,9 +785,12 @@ def process_line(line):
                 def delayed_state_init():
                     import time
                     time.sleep(5)  # Longer delay - wait for game to fully stabilize
-                    # Re-check that we're not in a crash/reload cycle
+                    # Wait for map loading to finish (PAUSE_STATE clears when game loaded)
+                    wait_start = time.time()
+                    while (serverstate.PAUSE_STATE or serverstate.CONNECTING) and time.time() - wait_start < 30:
+                        time.sleep(1)
                     if serverstate.PAUSE_STATE or serverstate.CONNECTING:
-                        logging.info("Skipping delayed state init - state changed during delay")
+                        logging.warning("Delayed state init: timed out waiting for game to load (30s)")
                         return
                     logging.info("Forcing state initialization after connection")
                     api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
@@ -790,6 +822,11 @@ def process_line(line):
                 logging.info("Game loaded. Continuing state.")
                 serverstate.STATE.say_connect_msg()
                 PAUSE_STATE_START_TIME = None
+
+                # After game reload: force bot to spectator mode and re-set secret for identification
+                if serverstate.STATE and hasattr(serverstate.STATE, 'secret'):
+                    api.exec_command(f"team s;seta color1 {serverstate.STATE.secret}")
+                    logging.info("Game reload: forced team s and re-set color1 secret for bot identification")
 
                 if hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS:
                     serverstate.reset_recovery_state()

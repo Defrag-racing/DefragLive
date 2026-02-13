@@ -62,6 +62,11 @@ FAILED_FOLLOW_COOLDOWN = 10  # Retry after 10 seconds
 MAX_FOLLOW_FAILURES = 3  # Give up after 3 consecutive failures
 PERMANENTLY_EXCLUDED = set()  # Player IDs that failed too many times
 
+# Fixed bot identifier per instance - generated once at module load, never changes.
+# Used as color1 value so the bot can always identify itself in svinfo reports.
+# Constant per instance ensures color1 persists through map changes via seta.
+BOT_SECRET = ''.join(random.choice('0123456789ABCDEF') for i in range(16))
+
 # Auto greeting messages with Twitch viewer count integration
 # Colors: ^1=Red ^2=Green ^3=Yellow ^4=Blue ^5=Cyan ^7=White
 GREETING_MESSAGES = [
@@ -777,41 +782,44 @@ class State:
         for key in server_info:
             setattr(self, key.replace('sv_', ''), server_info[key])
         
-        # FIX: Find the actual bot player by the secret code and update bot_id
+        # Find the actual bot player by the secret code and update bot_id
+        old_bot_id = self.bot_id
         bot_player = None
         for player in self.players:
             if player.c1 == self.secret:  # Bot player has the secret as color1
                 bot_player = player
-                self.bot_id = player.id  # Update bot_id to new server's ID
                 break
-        
-        if bot_player:
-            # Verify bot_id is still correct (can change during map changes/server switches)
-            new_bot_id = bot_player.id
-            if new_bot_id != self.bot_id:
-                logging.warning(f"BOT ID MISMATCH DETECTED!")
-                logging.warning(f"  Old bot_id: {self.bot_id}")
-                logging.warning(f"  New bot_id: {new_bot_id}")
-                logging.warning(f"  Current player_id: {self.current_player_id}")
-                logging.warning(f"  Updating bot_id to {new_bot_id}")
-                self.bot_id = new_bot_id
-                # If we were spectating ourselves with wrong ID, reset to new bot_id
-                if self.current_player_id == self.bot_id or self.current_player_id not in [p.id for p in self.players]:
-                    self.current_player_id = self.bot_id
-                    logging.warning(f"  Reset current_player_id to new bot_id: {self.bot_id}")
 
-            # Only reset current_player_id if it's invalid, don't always reset to bot_id
-            # Convert player IDs to int for proper comparison
+        # Fallback: if secret lookup failed, try to find bot by name
+        if not bot_player:
+            bot_name_patterns = ['defrag.live', 'defraglive']
+            for player in self.players:
+                clean_name = re.sub(r'\^.', '', player.n).strip().lower() if hasattr(player, 'n') else ''
+                if any(pattern in clean_name for pattern in bot_name_patterns):
+                    bot_player = player
+                    logging.warning(f"BOT ID: Secret lookup failed, identified bot by name '{player.n}' (ID: {player.id})")
+                    # Re-set color1 to secret so future lookups work
+                    try:
+                        api.exec_command(f"seta color1 {self.secret}", verbose=False)
+                        logging.info(f"BOT ID: Re-set color1 to secret after name fallback")
+                    except Exception as e:
+                        logging.error(f"BOT ID: Failed to re-set color1: {e}")
+                    break
+
+        if bot_player:
+            new_bot_id = int(bot_player.id)
+            if new_bot_id != old_bot_id:
+                logging.warning(f"BOT ID CHANGED: {old_bot_id} -> {new_bot_id} (player: {bot_player.n})")
+            self.bot_id = new_bot_id
+
+            # Only reset current_player_id if it's invalid
             player_ids = [int(p.id) for p in self.players]
             if self.current_player_id not in player_ids:
-                # DEBUG: Add comprehensive logging for player reset
-                logging.info(f"RESET DEBUG: Current player ID {self.current_player_id} not found in player list")
-                logging.info(f"RESET DEBUG: Available player IDs: {player_ids}")
-                logging.info(f"RESET DEBUG: All players: {[(p.id, p.n, p.t, p.c1) for p in self.players]}")
-                logging.info(f"RESET DEBUG: Bot ID: {self.bot_id}")
-
+                logging.info(f"RESET DEBUG: Current player ID {self.current_player_id} not found in player list {player_ids}")
                 self.current_player_id = self.bot_id
-                logging.info(f"Reset current_player_id to bot_id due to invalid player")
+                logging.info(f"Reset current_player_id to bot_id {self.bot_id}")
+        else:
+            logging.warning(f"BOT ID: Could not find bot player by secret or name. bot_id remains {self.bot_id}")
         
         self.current_player = self.get_player_by_id(self.current_player_id)
         if self.bot_id in self.spec_ids:
@@ -824,7 +832,6 @@ class State:
         perm_excluded = [pid for pid in self.spec_ids if pid in PERMANENTLY_EXCLUDED]
         if perm_excluded:
             [self.spec_ids.remove(pid) for pid in perm_excluded]
-            logging.info(f"Permanently excluded players (too many failures): {perm_excluded}")
 
         # NOTE: Don't clear failure count here - we need to wait until after spectating_self check
         # to confirm we're actually successfully spectating the player (not just set current_player_id)
@@ -1123,8 +1130,8 @@ def initialize_state(force=False):
     AFK_HELP_THREADS.clear()
 
     try:
-        # Create a secret code. Only "secret" for one use.
-        secret = ''.join(random.choice('0123456789ABCDEF') for i in range(16))
+        # Use the fixed instance-level secret (BOT_SECRET) - persists through map changes
+        secret = BOT_SECRET
         server_info, bot_player, timeout_flag = None, [], 0
 
         init_counter = 0
@@ -1349,8 +1356,26 @@ def validate_state():
     spectating_self = STATE.current_player_id == STATE.bot_id
 
     # Additional check using dfn if bot player exists and ID check wasn't sufficient
-    if not spectating_self and STATE.get_player_by_id(STATE.bot_id) is not None:
-        spectating_self = STATE.curr_dfn == STATE.get_player_by_id(STATE.bot_id).dfn
+    if not spectating_self:
+        bot_player = STATE.get_player_by_id(STATE.bot_id)
+        if bot_player is not None:
+            spectating_self = STATE.curr_dfn == bot_player.dfn
+        else:
+            # bot_id doesn't match any player - check if we're spectating the bot by name/secret
+            current_player = STATE.get_player_by_id(STATE.current_player_id)
+            if current_player is not None:
+                # Check by secret color1
+                if current_player.c1 == STATE.secret:
+                    logging.warning(f"SPECTATING_SELF DETECTED by secret: current_player {current_player.n} (ID: {STATE.current_player_id}) has bot secret")
+                    STATE.bot_id = int(current_player.id)
+                    spectating_self = True
+                else:
+                    # Check by bot name pattern
+                    clean_name = re.sub(r'\^.', '', current_player.n).strip().lower() if hasattr(current_player, 'n') else ''
+                    if any(p in clean_name for p in ['defrag.live', 'defraglive']):
+                        logging.warning(f"SPECTATING_SELF DETECTED by name: current_player '{current_player.n}' (ID: {STATE.current_player_id}) matches bot name")
+                        STATE.bot_id = int(current_player.id)
+                        spectating_self = True
 
     # ALSO check if we're spectating a spectator (team 3) or a disconnected player - bot should only spectate active players
     if not spectating_self and STATE.current_player_id != STATE.bot_id:
@@ -1363,14 +1388,6 @@ def validate_state():
             # Spectating a spectator (team 3)
             logging.info(f"SPECTATING_SPECTATOR DETECTED: Currently spectating {current_player.n} (ID: {STATE.current_player_id}) who is team 3 (spectator). Switching to active player.")
             spectating_self = True  # Treat this like spectating self - need to switch away
-
-    # DEBUG: Log spectating_self detection details when potentially problematic
-    if STATE.current_player_id == STATE.bot_id and not spectating_self:
-        logging.warning(f"SPECTATE_SELF DEBUG: Detection mismatch - current_player_id={STATE.current_player_id}, bot_id={STATE.bot_id}, but spectating_self={spectating_self}")
-        bot_player = STATE.get_player_by_id(STATE.bot_id)
-        logging.warning(f"SPECTATE_SELF DEBUG: Bot player object exists: {bot_player is not None}, curr_dfn: {STATE.curr_dfn}")
-        if bot_player:
-            logging.warning(f"SPECTATE_SELF DEBUG: Bot player dfn: {bot_player.dfn}, dfn match: {STATE.curr_dfn == bot_player.dfn}")
 
     # Current player spectated has turned on the no-spec system
     # Only consider players in nospec_ids as truly nospec (not team 3 spectators)
@@ -2086,14 +2103,20 @@ def enhanced_connect(ip, caller=None):
     global PAUSE_STATE, CONNECTING, CONNECTION_START_TIME, CURRENT_IP
     global AFK_COUNTDOWN_ACTIVE, AFK_HELP_THREADS, RECOVERY_IN_PROGRESS
     global STATE_INITIALIZED, RECONNECTED_CHECK
+    global PERMANENTLY_EXCLUDED, FAILED_FOLLOW_ATTEMPTS
 
     # Reset console connection guard so new connection detection isn't blocked
     import console
     console.CONNECTION_HANDLED_TIME = 0
 
-    # Reset recovery state for new connections
+    # Reset recovery state and player tracking for new connections
     if ip != CURRENT_IP:
         reset_recovery_state()
+        # Player IDs are server-specific - clear exclusions when switching servers
+        if PERMANENTLY_EXCLUDED:
+            logging.info(f"Clearing {len(PERMANENTLY_EXCLUDED)} permanently excluded players for new server: {PERMANENTLY_EXCLUDED}")
+        PERMANENTLY_EXCLUDED.clear()
+        FAILED_FOLLOW_ATTEMPTS.clear()
 
     # Record connection start time - BUT don't reset if we're already connecting to same server
     # This prevents timeout bypass when user spam-reconnects to same hung server
@@ -2519,8 +2542,32 @@ def check_bot_team_status():
     # Get bot player object
     bot_player = STATE.get_player_by_id(STATE.bot_id)
     if not bot_player:
-        logging.warning("TEAM DEBUG: Bot player not found during team check")
-        return
+        # bot_id is stale (can happen after map change) - try to re-identify by secret color1
+        old_bot_id = STATE.bot_id
+        for player in STATE.players:
+            if player.c1 == STATE.secret:
+                bot_player = player
+                STATE.bot_id = int(player.id)
+                logging.warning(f"TEAM DEBUG: Bot ID re-identified by secret! Updated bot_id from {old_bot_id} to {STATE.bot_id}")
+                # Also update spec_ids - remove bot from spectatable list
+                if STATE.bot_id in STATE.spec_ids:
+                    STATE.spec_ids.remove(STATE.bot_id)
+                break
+        if not bot_player:
+            # Fallback: try to find by known bot name patterns
+            bot_name_patterns = ['defrag.live', 'defraglive']
+            for player in STATE.players:
+                clean_name = re.sub(r'\^.', '', player.n).strip().lower() if hasattr(player, 'n') else ''
+                if any(pattern in clean_name for pattern in bot_name_patterns):
+                    bot_player = player
+                    STATE.bot_id = int(player.id)
+                    logging.warning(f"TEAM DEBUG: Bot ID re-identified by name '{player.n}'! Updated bot_id from {old_bot_id} to {STATE.bot_id}")
+                    if STATE.bot_id in STATE.spec_ids:
+                        STATE.spec_ids.remove(STATE.bot_id)
+                    break
+        if not bot_player:
+            logging.warning(f"TEAM DEBUG: Bot player not found during team check (bot_id={STATE.bot_id}, tried secret and name fallback)")
+            return
 
     # Log current team status for debugging (only when change-based logging allows it)
     from config import LOG_ONLY_CHANGES

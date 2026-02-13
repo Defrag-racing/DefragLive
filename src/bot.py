@@ -19,6 +19,29 @@ import sys
 import twitch_commands
 import filters
 import psutil
+import ctypes
+
+def is_game_hung():
+    """Check if the game window is hung (Not Responding) via Windows API"""
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "TwitchBot Engine")
+        return bool(hwnd and user32.IsHungAppWindow(hwnd))
+    except Exception:
+        return False
+
+def kill_game_processes():
+    """Kill all game-related processes"""
+    killed = []
+    try:
+        for proc in psutil.process_iter(['pid', 'name']):
+            if any(name in proc.info['name'].lower() for name in ['defrag', 'quake', 'iodfe', 'ioq3', 'odfe']):
+                killed.append(f"{proc.info['name']} (PID: {proc.info['pid']})")
+                logging.critical(f"Killing game process {proc.info['name']} (PID: {proc.info['pid']})")
+                proc.kill()
+    except Exception as e:
+        logging.critical(f"Kill failed: {e}")
+    return killed
 
 # Write PID to file at startup
 with open("bot_pid.txt", "w") as f:
@@ -212,6 +235,12 @@ if __name__ == "__main__":
     handlers = [file_handler, stdout_handler]
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S', level=logging.INFO, handlers=handlers)
 
+    # Kill hung game process at startup before attempting AHK calls
+    if is_game_hung():
+        logging.critical("Startup: Game is NOT RESPONDING, killing before init")
+        kill_game_processes()
+        time.sleep(5)
+
     try:
         api.api_init()
         window_flag = True
@@ -260,14 +289,34 @@ if __name__ == "__main__":
     def add_periodic_health_check():
         last_api_success = time.time()
         pause_watchdog_start = None  # Independent pause tracking
+        hung_since = None  # Track when process first detected as hung
 
         def health_check_worker():
-            nonlocal last_api_success, pause_watchdog_start
+            nonlocal last_api_success, pause_watchdog_start, hung_since
             logging.info("WATCHDOG: Pause watchdog initialized")
             while True:
                 time.sleep(30)  # Check every 30 seconds
 
                 current_time = time.time()
+
+                # Check if game window is hung (Not Responding) via Windows API
+                # This runs BEFORE api.api_init() to avoid AHK blocking on hung window
+                if is_game_hung():
+                    if hung_since is None:
+                        hung_since = current_time
+                        logging.warning("WATCHDOG: Game process NOT RESPONDING detected")
+                    hung_duration = current_time - hung_since
+                    logging.warning(f"WATCHDOG: Game NOT RESPONDING for {hung_duration:.0f}s")
+                    if hung_duration >= 120:  # 2 minutes
+                        logging.critical("WATCHDOG: Killing hung game process after 2 minutes")
+                        kill_game_processes()
+                        hung_since = None
+                        last_api_success = current_time
+                    continue  # Skip api.api_init() when game is hung - AHK would block
+                else:
+                    if hung_since is not None:
+                        logging.info(f"WATCHDOG: Game responding again after {current_time - hung_since:.0f}s")
+                        hung_since = None
 
                 # Check if API calls are working (game is responsive)
                 try:
@@ -281,25 +330,12 @@ if __name__ == "__main__":
                         logging.critical(f"Game has been unresponsive for {current_time - last_api_success:.0f} seconds")
                         logging.critical(f"Last successful API call: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_api_success))}")
                         logging.critical(f"Current time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time))}")
-                        try:
-                            killed_processes = []
-                            # Find and kill defrag processes
-                            for proc in psutil.process_iter(['pid', 'name']):
-                                if any(name in proc.info['name'].lower() for name in ['defrag', 'quake', 'iodfe', 'ioq3']):
-                                    killed_processes.append(f"{proc.info['name']} (PID: {proc.info['pid']})")
-                                    logging.critical(f"HEALTH CHECK: Killing unresponsive game process {proc.info['name']} (PID: {proc.info['pid']})")
-                                    proc.kill()
-
-                            if killed_processes:
-                                logging.critical(f"HEALTH CHECK: Successfully killed {len(killed_processes)} process(es): {', '.join(killed_processes)}")
-                            else:
-                                logging.critical("HEALTH CHECK: No matching game processes found to kill")
-
-                        except Exception as e:
-                            logging.critical(f"HEALTH CHECK: Failed to kill game process: {e}")
-                        finally:
-                            logging.critical("HEALTH CHECK: Process kill attempt completed")
-                            logging.critical("=" * 60)
+                        killed = kill_game_processes()
+                        if killed:
+                            logging.critical(f"HEALTH CHECK: Killed {len(killed)} process(es): {', '.join(killed)}")
+                        else:
+                            logging.critical("HEALTH CHECK: No matching game processes found to kill")
+                        logging.critical("=" * 60)
 
                 # Check for recovery deadlock
                 if (hasattr(serverstate, 'RECOVERY_IN_PROGRESS') and serverstate.RECOVERY_IN_PROGRESS and
@@ -354,6 +390,10 @@ if __name__ == "__main__":
 
     while True:
         try:
+            if is_game_hung():
+                logging.warning("Main loop: Game is hung, skipping api_init")
+                time.sleep(5)
+                continue
             api.api_init()
             time.sleep(5)
 
