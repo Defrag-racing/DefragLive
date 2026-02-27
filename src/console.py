@@ -333,6 +333,64 @@ def read(file_path: str):
     delay_processor.daemon = True
     delay_processor.start()
 
+    # Check last lines of the file for crash errors that happened before bot started
+    # read_tail() seeks to end and only reads NEW lines, so pre-existing crashes are missed
+    try:
+        with open(file_path, 'r') as backlog:
+            # Read last 8KB of file to check for recent errors
+            backlog.seek(0, os.SEEK_END)
+            file_size = backlog.tell()
+            read_from = max(0, file_size - 8192)
+            backlog.seek(read_from)
+            if read_from > 0:
+                backlog.readline()  # Discard partial first line
+            tail_lines = backlog.readlines()
+
+        # Check for crash indicators in the backlog
+        unknown_cmd_count = 0
+        crash_detected = False
+        crash_line = None
+        for bline in tail_lines:
+            bline = bline.strip()
+            if not bline:
+                continue
+            # Check for ACCESS_VIOLATION / exception errors
+            for error_pattern in ERROR_FILTERS:
+                if error_pattern in bline and ERROR_FILTERS[error_pattern] == "RECONNECT":
+                    crash_detected = True
+                    crash_line = bline
+            # Check for crashed cgame (Unknown command spam)
+            if 'Unknown command "varmath' in bline or 'Unknown command "svinfo_report' in bline:
+                unknown_cmd_count += 1
+            else:
+                unknown_cmd_count = 0  # Reset on non-matching line
+
+        if crash_detected and unknown_cmd_count >= 10:
+            logging.critical(f"STARTUP CHECK: Crashed cgame detected in backlog! Error: {crash_line}")
+            logging.critical(f"STARTUP CHECK: {unknown_cmd_count} consecutive 'Unknown command' lines - cgame not loaded")
+            logging.critical("STARTUP CHECK: Triggering immediate recovery...")
+            serverstate.RECOVERY_ATTEMPTS = 1  # Skip state resume, go to reconnect
+            recovery_thread = threading.Thread(
+                target=serverstate.smart_connection_recovery,
+                args=("Startup: crashed cgame detected in console backlog",),
+                daemon=True
+            )
+            recovery_thread.start()
+        elif crash_detected:
+            logging.warning(f"STARTUP CHECK: Crash error found in backlog ({crash_line}) but game may have recovered")
+        elif unknown_cmd_count >= 10:
+            logging.critical(f"STARTUP CHECK: {unknown_cmd_count} consecutive 'Unknown command' lines - cgame crashed")
+            logging.critical("STARTUP CHECK: Triggering immediate recovery...")
+            serverstate.RECOVERY_ATTEMPTS = 1
+            recovery_thread = threading.Thread(
+                target=serverstate.smart_connection_recovery,
+                args=("Startup: Unknown command spam detected in console backlog",),
+                daemon=True
+            )
+            recovery_thread.start()
+    except Exception as e:
+        logging.error(f"STARTUP CHECK: Failed to check backlog: {e}")
+
     with open(file_path, 'r') as log:
         new_lines = read_tail(log)
 
@@ -510,7 +568,7 @@ def process_line(line):
         return line_data  # Return as MISC type (won't be queued)
 
     # you can add more errors like this: ['error1', 'error2', 'error3']
-    errors = ['ERROR: Unhandled exception cought']
+    errors = ['ERROR: Unhandled exception caught']
 
     # SERVERCOMMAND
 

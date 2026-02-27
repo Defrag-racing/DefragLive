@@ -302,13 +302,22 @@ if __name__ == "__main__":
                 # Check if game window is hung (Not Responding) via Windows API
                 # This runs BEFORE api.api_init() to avoid AHK blocking on hung window
                 if is_game_hung():
+                    is_loading = hasattr(serverstate, 'PAUSE_STATE') and serverstate.PAUSE_STATE
                     if hung_since is None:
                         hung_since = current_time
-                        logging.warning("WATCHDOG: Game process NOT RESPONDING detected")
+                        if is_loading:
+                            logging.info("WATCHDOG: Game not responding during map loading (expected)")
+                        else:
+                            logging.warning("WATCHDOG: Game process NOT RESPONDING detected")
                     hung_duration = current_time - hung_since
-                    logging.warning(f"WATCHDOG: Game NOT RESPONDING for {hung_duration:.0f}s")
-                    if hung_duration >= 120:  # 2 minutes
-                        logging.critical("WATCHDOG: Killing hung game process after 2 minutes")
+                    # Use longer timeout during map loading (5 min) vs normal (2 min)
+                    hung_limit = 300 if is_loading else 120
+                    if not is_loading:
+                        logging.warning(f"WATCHDOG: Game NOT RESPONDING for {hung_duration:.0f}s")
+                    elif hung_duration > 60:  # Only log during loading if it's been a while
+                        logging.warning(f"WATCHDOG: Game NOT RESPONDING during map loading for {hung_duration:.0f}s (limit: {hung_limit}s)")
+                    if hung_duration >= hung_limit:
+                        logging.critical(f"WATCHDOG: Killing hung game process after {hung_limit}s (loading={is_loading})")
                         kill_game_processes()
                         hung_since = None
                         last_api_success = current_time
@@ -391,7 +400,8 @@ if __name__ == "__main__":
     while True:
         try:
             if is_game_hung():
-                logging.warning("Main loop: Game is hung, skipping api_init")
+                if not serverstate.PAUSE_STATE:
+                    logging.warning("Main loop: Game is hung, skipping api_init")
                 time.sleep(5)
                 continue
             api.api_init()
