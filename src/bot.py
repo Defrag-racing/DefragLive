@@ -439,10 +439,14 @@ if __name__ == "__main__":
         except api.WindowNotFoundError:
             if not serverstate.VID_RESTARTING:
                 window_flag = False
-                logging.info("Defrag window lost. Restarting...")
-                df_process = Process(target=launch)
-                df_process.start()
-                console.STOP_CONSOLE = True
-                time.sleep(12)
+                if not df_process or not df_process.is_alive():
+                    logging.info("Defrag not running, starting...")
+                    df_process = Process(target=launch)
+                    df_process.start()
+                    console.STOP_CONSOLE = True
+                    time.sleep(20)
+                else:
+                    logging.info("Defrag is starting, waiting for engine window...")
+                    time.sleep(5)
                 con_thread = threading.Thread(target=console.read, args=(logfile_path,), daemon=True)
                 con_thread.start()
