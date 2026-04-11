@@ -305,8 +305,7 @@ def read_tail(thefile):
         # sleep if file hasn't been updated
         if not line:
             time.sleep(0.25)
-            # Check pause timeout during idle periods
-            #check_pause_timeout()
+            thefile.seek(thefile.tell())  # Refresh file handle - prevents Windows stale EOF bug
             continue
 
         yield line
