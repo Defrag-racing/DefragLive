@@ -132,11 +132,13 @@ def init():
 def load_filters():
     names = get_list('blacklist_names')
     for idx, line in enumerate(names):
-        authors_automaton.add_word(line, (idx, line))
+        normalized = strip_repeated_characters(line.lower())
+        authors_automaton.add_word(normalized, (idx, normalized))
 
     chat = get_list('blacklist_chat')
     for idx, line in enumerate(chat):
-        chat_automaton.add_word(line, (idx, line))
+        normalized = strip_repeated_characters(line.lower())
+        chat_automaton.add_word(normalized, (idx, normalized))
 
     if len(authors_automaton) > 0:
         authors_automaton.make_automaton()
