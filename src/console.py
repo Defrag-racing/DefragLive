@@ -726,7 +726,7 @@ def process_line(line):
         if serverstate.CONNECTING:
             logging.info(f"[DEBUG] CONNECTING=True, checking line: {line}")
 
-        if (line.startswith('Not recording a demo.') or
+        if ((line.startswith('Not recording a demo.') and not serverstate.CONNECTING) or
             line.startswith("report written to system/reports/initialstate.txt") or
             line.startswith("Sound memory manager started") or
             line.startswith("CL_InitCGame:") or
