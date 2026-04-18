@@ -397,6 +397,8 @@ if __name__ == "__main__":
     # Call it once:
     add_periodic_health_check()
 
+    df_process = None
+
     while True:
         try:
             if is_game_hung():
