@@ -2448,8 +2448,9 @@ def send_world_record_celebration(player_name=None, record_time=None):
             celebration_message = celebration_template
         
         # Send to game chat (NO PLAYER NAME OR TIME ADDED)
-        logging.info(f"Sending server record celebration: {celebration_message}")
-        api.exec_command(f"say {celebration_message}")
+        # Disabled - players found it cringe. Kept for future re-enable.
+        logging.info(f"Server record celebration (in-game say disabled): {celebration_message}")
+        # api.exec_command(f"say {celebration_message}")
         
         # Also send a display message for extra emphasis (NO PLAYER NAME OR TIME)
         api.exec_command(f"cg_centertime 5;displaymessage 140 12 ^1SERVER RECORD BROKEN")
