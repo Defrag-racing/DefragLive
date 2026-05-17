@@ -81,7 +81,6 @@ GREETING_MESSAGES = [
     "^2hello, ^3{count} ^7on stream",
     "^2hey, ^3{count} ^7watching",
     "^2hi, ^3{count} ^7tuned in",
-    "^7^3{count} ^7watching",
     "^2hi all",
     "^2hi defraggers",
     "^2hey defraggers",
