@@ -90,10 +90,13 @@ def get_active_players(data):
         if 'notice' in data:
             return data['scores']['players']
 
+        # defrag.racing returns `players` either as a dict (legacy: clientId -> player)
+        # or as a list of player dicts (current format). Both branches must filter nospec.
         for plyr_num in data['players']:
             if isinstance(plyr_num, dict):
-                speccable_players.append(int(plyr_num['clientId']))
-                active_players.append(int(plyr_num['clientId']))
+                # Current format: list of dicts. nospec is truthy (1/True) for nospec'd players.
+                if not plyr_num.get('nospec'):
+                    speccable_players.append(int(plyr_num['clientId']))
                 continue
 
             player = data['players'][plyr_num]
