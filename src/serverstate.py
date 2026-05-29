@@ -515,6 +515,9 @@ class State:
         self.show_name = True
         # NEW: Track custom AFK timeouts per player
         self.player_afk_timeouts = {}  # player_id -> custom_timeout
+        # Latest spectated-player input keys captured from console echo (DFL_INPUTS:...)
+        # Initial value 'F' = pretend non-AFK so the counter doesn't trigger before first echo arrives.
+        self.current_inputs = 'F'
 
     def get_afk_timeout_for_player(self, player_id):
         """Get the AFK timeout for a specific player, defaulting to global AFK_TIMEOUT"""
@@ -646,12 +649,10 @@ class State:
 
     def get_inputs(self):
         """Helper functions for easily retrieving the latest inputs recorded from the watched player."""
-        bot_player = self.get_player_by_id(self.bot_id)
-
-        if bot_player is None:
+        inputs = getattr(self, 'current_inputs', None)
+        if inputs is None:
             return 'F'
-
-        return bot_player.c2.replace(' ', '')
+        return inputs.replace(' ', '')
 
     def get_specable_players(self):
         """Helper function to return a list of speccable players as a human-readable string"""
@@ -759,7 +760,13 @@ def start():
                     logging.error(f"Error saving serverstate to file: {e}")
 
                 if not PAUSE_STATE:
-                    api.exec_command("varmath color2 = $chsinfo(152);"  # Store inputs in color2
+                    # Echo spectated player's input keys to console so console.py captures them
+                    # into STATE.current_inputs (used by AFK detection). We used to stuff this into
+                    # the userinfo cvar `color2`, but that broadcasts ClientUserinfoChanged to the
+                    # server every 2s and spams server admins' logs. Echo stays local.
+                    # NOTE: $chsinfo() must be space-separated from preceding text — varcommand
+                    # only substitutes it when it's a standalone token.
+                    api.exec_command("varcommand echo DFL_INPUTS: $chsinfo(152);"
                                            "silent svinfo_report serverstate.txt", verbose=False)  # Write a new report
                     # Wait 0.5s to ensure file is completely written before reading
                     time.sleep(0.5)

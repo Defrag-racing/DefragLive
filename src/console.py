@@ -494,6 +494,47 @@ def process_line(line):
     
     line = line.strip()
 
+    # Capture spectated player's input keys from echo before ANY other processing
+    # (no logging, no filters, no relay to extension). Echoed by the state-update loop
+    # every 2s as: "DFL_INPUTS:<keys>" e.g. "DFL_INPUTS:FR A". Used by AFK detection only.
+    if line.startswith('DFL_INPUTS:'):
+        try:
+            if serverstate.STATE is not None:
+                serverstate.STATE.current_inputs = line[len('DFL_INPUTS:'):]
+        except Exception:
+            pass
+        return {
+            "id": message_to_id(f"{time.time()}_INPUTS"),
+            "type": "MISC",
+            "command": None,
+            "author": None,
+            "content": "",
+            "timestamp": time.time()
+        }
+
+    # Filter Q3 "Issuing Command:" debug echoes — printed for every console command
+    # we send. Gets misparsed as SAY (colon+color pattern) and spams extension.
+    if line.startswith('^3Issuing Command:'):
+        return {
+            "id": message_to_id(f"{time.time()}_ISSUING"),
+            "type": "MISC",
+            "command": None,
+            "author": None,
+            "content": "",
+            "timestamp": time.time()
+        }
+
+    # Filter empty lines — get misparsed as empty PRINT messages and spam extension.
+    if not line:
+        return {
+            "id": message_to_id(f"{time.time()}_EMPTY"),
+            "type": "MISC",
+            "command": None,
+            "author": None,
+            "content": "",
+            "timestamp": time.time()
+        }
+
     # ADD DEADLOCK CHECK EARLY
     if hasattr(serverstate, 'check_recovery_deadlock'):
         try:
