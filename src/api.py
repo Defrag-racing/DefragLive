@@ -59,8 +59,11 @@ def api_init():
 def exec_command(cmd, verbose=True):
     if verbose:
         logging.info(f"Execing command {cmd}")
-    # send the text to the console window, escape commas (must be `, to show up in chat)
-    AHK.run_script("ControlSetText, , " + cmd.replace(',', '`,') + ", ahk_id " + CONSOLE +
+    # Escape AHK1 special chars in the command text:
+    #   `, = literal comma (otherwise AHK parses comma as parameter separator)
+    #   `: = literal colon (AHK1 misparses `:D` and similar without escape — confirmed by repro)
+    escaped = cmd.replace(',', '`,').replace(':', '`:')
+    AHK.run_script("ControlSetText, , " + escaped + ", ahk_id " + CONSOLE +
                 "\nControlSend, , {Enter}, ahk_id " + CONSOLE, blocking=True)
 
 
