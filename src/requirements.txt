@@ -5,6 +5,7 @@ env==0.1.0
 Flask==3.1.0
 pyahocorasick==2.1.0
 requests==2.32.3
+pysher==1.0.8
 twitchio==2.10.0
 urllib3==2.3.0
 websockets==14.1

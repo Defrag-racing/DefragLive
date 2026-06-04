@@ -9,6 +9,7 @@ import time
 import console
 import serverstate
 import websocket_console
+import web_transport
 from env import environ
 import threading
 import asyncio
@@ -280,7 +281,9 @@ if __name__ == "__main__":
     flask_thread.start()
 
     ws_loop = asyncio.new_event_loop()
-    ws_thread = threading.Thread(target=websocket_console.ws_worker, args=(console.WS_Q, ws_loop,), daemon=True)
+    # Web-native transport: publish to the web API + subscribe to its Reverb
+    # channel, instead of the old WebSocket link to the Python bridge.
+    ws_thread = threading.Thread(target=web_transport.ws_worker, args=(console.WS_Q, ws_loop,), daemon=True)
     ws_thread.start()
 
     bot_thread = threading.Thread(target=bot.run, daemon=True)
