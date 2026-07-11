@@ -87,6 +87,10 @@ def _start_subscriber():
         port=config.REVERB_PORT,
         secure=(str(config.REVERB_SCHEME).lower() in ('https', 'wss')),
         daemon=True,
+        # pysher defaults to log_level=INFO, which dumps every raw Reverb
+        # message ("Connection: Message - {...}") - one giant serverstate JSON
+        # every ~2-3s - into our log. WARNING keeps connect/error events only.
+        log_level=logging.WARNING,
     )
 
     def _connected(_data):
