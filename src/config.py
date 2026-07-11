@@ -9,7 +9,17 @@ CFG_NAME = environ['CFG_NAME']
 CFG_P = os.path.join(DF_DIR, CFG_NAME)
 DUMP_NAME = "condump.txt"
 DUMP_P = os.path.join(DF_DIR, DUMP_NAME)
-WS_ADDRESS = environ['WS_ADDRESS']
+WS_ADDRESS = environ['WS_ADDRESS']  # legacy bridge WS (unused by web_transport)
+
+# Web-native transport (replaces the WS bridge). The bot POSTs chat/serverstate
+# to the web and subscribes to its Reverb channel for commands. Defaults keep
+# an existing env.py working without these keys.
+WEB_BASE_URL = environ.get('WEB_BASE_URL', 'https://defrag.racing')
+WEB_INGEST_TOKEN = environ.get('WEB_INGEST_TOKEN', '')
+REVERB_APP_KEY = environ.get('REVERB_APP_KEY', '')
+REVERB_HOST = environ.get('REVERB_HOST', 'tw.defrag.racing')
+REVERB_PORT = int(environ.get('REVERB_PORT', 443))
+REVERB_SCHEME = environ.get('REVERB_SCHEME', 'https')
 
 STATE_REPORT_P = os.path.join(DF_DIR, "system", "reports", environ["SVINFO_REPORT_NAME"])
 INITIAL_REPORT_P = os.path.join(DF_DIR, "system", "reports", "initialstate.txt")

@@ -10,7 +10,15 @@ environ = {
     "DF_EXE_PATH": "",
     "SVINFO_REPORT_NAME": "serverstate.txt",
     "CHANNEL": "",
-    "WS_ADDRESS": "ws://localhost:5005",
+    "WS_ADDRESS": "ws://localhost:5005",  # legacy bridge WS (unused by web_transport)
+    # Web-native transport (replaces the bridge). The bot POSTs to the web API
+    # and subscribes to its Reverb channel for commands.
+    "WEB_BASE_URL": "https://defrag.racing",
+    "WEB_INGEST_TOKEN": "",          # must match DEFRAGLIVE_INGEST_TOKEN on the web
+    "REVERB_APP_KEY": "",            # web's REVERB_APP_KEY
+    "REVERB_HOST": "tw.defrag.racing",
+    "REVERB_PORT": 443,
+    "REVERB_SCHEME": "https",
     "FLASK_SERVER": {
         "host": "127.0.0.1",
         "port": 5000
