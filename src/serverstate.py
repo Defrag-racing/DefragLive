@@ -35,7 +35,7 @@ AFK_TIMEOUT = 1000 if config.DEVELOPMENT else 30  # Switch after afk detected x 
 IDLE_TIMEOUT = 5 if config.DEVELOPMENT else 5  # Alone in server timeout.
 INIT_TIMEOUT = 10  # Determines how many times to try the state initialization before giving up.
 STANDBY_TIME = 1 if config.DEVELOPMENT else 15  # Time to wait before switching to next player.
-VOTE_TALLY_TIME = 10  # Amount of time to wait while tallying votes
+VOTE_TALLY_TIME = 7  # Amount of time to wait while tallying votes
 LAST_TEAM_CHECK_TIME = 0
 TEAM_CHECK_INTERVAL = 30  # Check every 30 seconds
 AFK_COUNTDOWN_ACTIVE = False
@@ -508,6 +508,8 @@ class State:
         self.afk_ids = []
         self.afk_timestamps = {}  # Track when each player was flagged as AFK (player_id -> timestamp)
         self.connect_msg = None
+        self.vote_active = False
+        self.vote_is_kick = False
         self.vote_time = time.time()
         self.vy_count = 0
         self.vn_count = 0
@@ -686,35 +688,56 @@ class State:
         greeting_thread = threading.Thread(target=delayed_nationality_greeting, daemon=True)
         greeting_thread.start()
 
-    def init_vote(self):
+    def init_vote(self, is_kick=False):
         self.vote_active = True
+        self.vote_is_kick = is_kick
         self.vote_time = time.time()
         self.voter_names = []
         self.vy_count = 0
         self.vn_count = 0
 
     def handle_vote(self):
+        # Majority shortcut: once one side has votes from more than half of
+        # the human players (bot excluded), the outcome can't flip - cast the
+        # vote right away instead of sitting out the rest of the tally window.
+        # Kick votes never shortcut; they always wait the full window.
+        if not getattr(self, 'vote_is_kick', False) and self.num_players:
+            majority = (self.num_players - 1) // 2 + 1
+            if max(self.vy_count, self.vn_count) >= majority:
+                logging.info(f"Vote majority reached ({self.vy_count} f1 vs. {self.vn_count} f2, "
+                             f"needed {majority}) - voting early.")
+                self.finish_vote()
+                return
+
         if time.time() - self.vote_time > VOTE_TALLY_TIME:
             logging.info("Voting tally done.")
-            if self.vn_count > self.vy_count:
-                api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. Voting ^3f2^7.")
-                logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Voting f2.")
-                api.exec_command("vote no")
-            elif self.vy_count > self.vn_count:
-                api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. Voting ^3f1^7.")
-                logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Voting f1.")
-                api.exec_command("vote yes")
-            else:
-                api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. No action.")
-                logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Not voting.")
+            self.finish_vote()
 
-            self.vote_time = 0
-            self.voter_names = []
-            self.vy_count = 0
-            self.vn_count = 0
-            self.vote_active = False
+    def finish_vote(self):
+        if self.vn_count > self.vy_count:
+            api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. Voting ^3f2^7.")
+            logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Voting f2.")
+            api.exec_command("vote no")
+        elif self.vy_count > self.vn_count:
+            api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. Voting ^3f1^7.")
+            logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Voting f1.")
+            api.exec_command("vote yes")
+        elif self.vy_count == 0 and not getattr(self, 'vote_is_kick', False):
+            # Nobody voted in chat. Auto-F1 non-kick votes so the server
+            # doesn't sit out its full 30s vote timer waiting on the bot -
+            # viewers had the whole tally window to object with ?f2.
+            api.exec_command("say ^7No chat votes. Voting ^3f1^7.")
+            logging.info("No chat votes received. Auto-voting f1 (non-kick vote).")
+            api.exec_command("vote yes")
         else:
-            return
+            api.exec_command(f"say ^3{self.vy_count} ^2f1 ^7vs. ^3{self.vn_count} ^1f2^7. No action.")
+            logging.info(f"{self.vy_count} f1s vs. {self.vn_count} f2s. Not voting.")
+
+        self.vote_time = 0
+        self.voter_names = []
+        self.vy_count = 0
+        self.vn_count = 0
+        self.vote_active = False
 
 
 class Player:

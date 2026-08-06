@@ -761,7 +761,8 @@ def process_line(line):
                 api.exec_command("vote yes")
             else:
                 logging.info("Multiple people in server, initiating vote tally.")
-                serverstate.STATE.init_vote()
+                is_kick_vote = 'kick' in vote_content.lower() or 'clientkick' in vote_content.lower()
+                serverstate.STATE.init_vote(is_kick=is_kick_vote)
                 api.exec_command("say ^7Vote detected. Should I vote yes or no? Send ^3?^7f1 for yes and ^3?^7f2 for no.")
 
         if serverstate.CONNECTING:

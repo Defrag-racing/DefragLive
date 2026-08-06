@@ -77,6 +77,8 @@ def handle_f1(line_data):
         logging.info(f'received f1 from {line_data["author"]}.')
         serverstate.STATE.voter_names.append(line_data["author"])
         serverstate.STATE.vy_count += 1
+        if getattr(serverstate.STATE, 'vote_active', False):
+            serverstate.STATE.handle_vote()  # majority shortcut may fire now
 
 
 def handle_f2(line_data):
@@ -84,6 +86,8 @@ def handle_f2(line_data):
         logging.info(f'received f2 from {line_data["author"]}.')
         serverstate.STATE.voter_names.append(line_data["author"])
         serverstate.STATE.vn_count += 1
+        if getattr(serverstate.STATE, 'vote_active', False):
+            serverstate.STATE.handle_vote()  # majority shortcut may fire now
 
 
 def handle_howmany(line_data):
