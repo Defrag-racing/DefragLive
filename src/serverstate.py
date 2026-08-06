@@ -1011,18 +1011,22 @@ def standby_mode_started():
     last_serverstate_refresh = time.time()
     serverstate_refresh_interval = 10  # Refresh serverstate every 10 seconds during standby
 
+    # The loop below re-execs the same two display messages every few seconds
+    # for up to STANDBY_TIME minutes - log it once instead of on every cycle.
+    logging.info(f"[Standby] Waiting for a server (up to {STANDBY_TIME} min), cycling on-screen connect prompt.")
+
     while (time.time() - STANDBY_START_T) < 60 * STANDBY_TIME:
         if RECONNECTED_CHECK:
             ignore_finish_standbymode = True
             RECONNECTED_CHECK = False
             break
 
-        api.exec_command("team p")
+        api.exec_command("team p", verbose=False)
 
-        api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3No active servers. On standby mode.")
+        api.exec_command(f"cg_centertime 2;displaymessage 140 10 ^3No active servers. On standby mode.", verbose=False)
         #  api.display_message("No active servers. On standby mode.", time=msg_switch_t + 1)
         time.sleep(msg_switch_t)
-        api.exec_command(f"cg_centertime 2;displaymessage 140 10 Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.")
+        api.exec_command(f"cg_centertime 2;displaymessage 140 10 Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", verbose=False)
         #  api.display_message("Use ^3?^7connect ^3ip^7 or ^3?^7restart to continue the bot^3.", time=msg_switch_t)
         time.sleep(msg_switch_t)
 
