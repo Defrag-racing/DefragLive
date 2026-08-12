@@ -262,11 +262,15 @@ def handle_error_with_delay(error_line, error_action):
         logging.info(f"Error detected: {error_line}")
         
         # CHECK FOR CRITICAL CRASHES - skip to attempt 2 (reconnect)
+        # "was kicked" belongs here too: after a passed kick vote the client
+        # is already dropped from the server, so attempt 1 (state resume)
+        # can't succeed and only delays the reconnect by ~a minute.
         if any(crash_indicator in error_line for crash_indicator in [
-            "ACCESS_VIOLATION", 
-            "Exception Code:", 
+            "ACCESS_VIOLATION",
+            "Exception Code:",
             "Signal caught",
-            "forcefully unloading cgame vm"
+            "forcefully unloading cgame vm",
+            "was kicked"
         ]):
             logging.info("Critical crash detected - skipping state resume, going to reconnect")
             serverstate.RECOVERY_ATTEMPTS = 1  # Skip attempt 1, go to attempt 2
