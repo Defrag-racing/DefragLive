@@ -19,6 +19,7 @@ import filters
 import serverstate
 import servers
 import websocket_console
+from env import environ
 
 LOG = []
 CONSOLE_DISPLAY = []
@@ -243,6 +244,56 @@ def handle_map_error_with_countdown(map_name=None):
 #        if PAUSE_STATE_START_TIME is not None:
 #            PAUSE_STATE_START_TIME = None
 #            logging.info("State unpaused - timer reset")
+
+
+# --- Kick vote incident log -------------------------------------------------
+# Human-readable audit trail of every kick vote seen by the bot: who called it
+# on whom, when, on which server/map and who was present. One file, appended.
+PENDING_KICK_INCIDENT_T = None
+
+
+def _strip_colors(s):
+    return re.sub(r'\^.', '', s or '').strip()
+
+
+def _kick_incident_log_path():
+    return os.path.join(environ['LOG_DIR_PATH'], 'kick_incidents.log')
+
+
+def log_kick_incident(line, vote_content, is_bot_kick):
+    global PENDING_KICK_INCIDENT_T
+
+    caller = _strip_colors(line[:line.index('called a vote:')])
+    st = serverstate.STATE if hasattr(serverstate, 'STATE') else None
+
+    rec = [f"=== KICK VOTE {time.strftime('%Y-%m-%d %H:%M:%S')} ==="]
+    rec.append(f"caller : {caller}")
+    rec.append(f"vote   : {_strip_colors(vote_content)}" + ("   <- TARGET IS THE BOT" if is_bot_kick else ""))
+    if st:
+        rec.append(f"server : {_strip_colors(getattr(st, 'hostname', '?'))} ({getattr(st, 'ip', '?')})")
+        rec.append(f"map    : {getattr(st, 'mapname', '?')}")
+        players = getattr(st, 'players', None) or []
+        rec.append(f"players: {getattr(st, 'num_players', len(players))} online")
+        for p in players:
+            role = 'spectator' if getattr(p, 't', '') == '3' else 'player'
+            rec.append(f"  - id {p.id}: {_strip_colors(p.n)} [{role}]")
+    else:
+        rec.append("server : unknown (no serverstate)")
+
+    with open(_kick_incident_log_path(), 'a', encoding='utf-8') as f:
+        f.write('\n'.join(rec) + '\n')
+    PENDING_KICK_INCIDENT_T = time.time()
+    logging.info("Kick vote incident logged to kick_incidents.log")
+
+
+def log_kick_outcome(outcome):
+    """Append the pass/fail outcome to the last logged kick incident (if recent)."""
+    global PENDING_KICK_INCIDENT_T
+    if PENDING_KICK_INCIDENT_T and time.time() - PENDING_KICK_INCIDENT_T < 45:
+        with open(_kick_incident_log_path(), 'a', encoding='utf-8') as f:
+            f.write(f"outcome: {outcome}\n\n")
+        PENDING_KICK_INCIDENT_T = None
+# -----------------------------------------------------------------------------
 
 
 def handle_error_with_delay(error_line, error_action):
@@ -719,6 +770,13 @@ def process_line(line):
                 api.play_sound("worldrecord.wav")
                 serverstate.handle_world_record_event()
 
+        # Record the outcome of a pending kick vote incident (no-op otherwise)
+        if line.endswith('Vote passed.') or line.endswith('Vote failed.'):
+            try:
+                log_kick_outcome('PASSED' if line.endswith('Vote passed.') else 'FAILED')
+            except Exception as e:
+                logging.error(f"Failed to log kick outcome: {e}")
+
         if 'called a vote:' in line and is_server_msg(line, 'called a vote:'):
             logging.info("Vote detected.")
             
@@ -754,6 +812,13 @@ def process_line(line):
                             logging.info(f"Detected kick vote against bot by pattern '{pattern}': {vote_content}")
                             break
             
+            # Audit-log every kick vote (who called it on whom, where, who was present)
+            if 'kick' in vote_content.lower() or 'clientkick' in vote_content.lower():
+                try:
+                    log_kick_incident(line, vote_content, is_bot_kick)
+                except Exception as e:
+                    logging.error(f"Failed to log kick incident: {e}")
+
             if is_bot_kick:
                 # Always vote F2 (no) when someone tries to kick the bot
                 logging.info("Voting F2 to reject kick vote against bot.")
