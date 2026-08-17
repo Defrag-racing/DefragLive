@@ -287,6 +287,16 @@ WORLD_RECORD_MESSAGES = [
 LAST_WR_MESSAGE_TIME = 0
 WR_MESSAGE_COOLDOWN = 60  # 1 minute
 
+# Longest silence we allow before repeating the serverstate anyway. Normally we
+# only publish when the state hash changes, but two players standing still
+# produce an identical hash for as long as they stand there - one log showed 21
+# quiet minutes. The web treats a serverstate older than 600s as dead and falls
+# back to the placeholder card, so "Now spectating" disappeared mid-session and
+# looked like the bot was spectating itself. Republishing on a timer keeps the
+# card alive without weakening that 600s window, which is what makes the card
+# vanish when the bot really does die.
+SERVERSTATE_MAX_SILENCE = 60  # seconds
+
 # Twitch account validation cache
 TWITCH_ACCOUNT_CACHE = {}  # username -> (exists, timestamp)
 TWITCH_LIVE_CACHE = {}  # username -> (is_live, timestamp)
@@ -765,6 +775,7 @@ def start():
     state_paused_timer = 0
 
     prev_state, prev_state_hash, curr_state = None, None, None
+    last_serverstate_emit = 0.0
     initialize_state()
     while True:
         try:
@@ -840,9 +851,11 @@ def start():
                         if STATE.current_player is not None and STATE.current_player_id != STATE.bot_id:
                             curr_state = f"Spectating {STATE.current_player.n} on {STATE.mapname}" \
                                          f" in server {STATE.hostname} | ip: {STATE.ip}"
-                        if curr_state_hash != prev_state_hash:
+                        if curr_state_hash != prev_state_hash \
+                                or (time.time() - last_serverstate_emit) >= SERVERSTATE_MAX_SILENCE:
                             # Notify all websocket clients about new serverstate
                             notify_serverstate_change()
+                            last_serverstate_emit = time.time()
                         prev_state = curr_state
                         prev_state_hash = curr_state_hash
                         display_player_name(STATE.current_player_id)
