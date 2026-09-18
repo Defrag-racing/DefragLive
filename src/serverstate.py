@@ -783,6 +783,7 @@ def start():
     global VID_RESTARTING
 
     state_paused_timer = 0
+    grace_msg_shown_for = None  # CGAME_INIT_TIME we already showed the safe pause message for
 
     prev_state, prev_state_hash, curr_state = None, None, None
     last_serverstate_emit = 0.0
@@ -804,7 +805,13 @@ def start():
                     logging.error(f"Error saving serverstate to file: {e}")
 
                 if not PAUSE_STATE and cgame_grace_remaining() > 0:
-                    continue  # map just loaded - see CGAME_INIT_GRACE
+                    # map just loaded - see CGAME_INIT_GRACE. Tell viewers why
+                    # auto-spectate hasn't picked a player yet (once per load).
+                    if grace_msg_shown_for != CGAME_INIT_TIME:
+                        grace_msg_shown_for = CGAME_INIT_TIME
+                        api.display_message("^3Safe pause ^7- auto spectate resumes in a few seconds",
+                                            time=int(cgame_grace_remaining()) + 1)
+                    continue
                 if not PAUSE_STATE:
                     # Echo spectated player's input keys to console so console.py captures them
                     # into STATE.current_inputs (used by AFK detection). We used to stuff this into
