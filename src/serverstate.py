@@ -310,6 +310,16 @@ CURRENT_IP = None
 
 STATE = None
 PAUSE_STATE = False
+
+# Right after a map load, cgame-proxymod can crash (ACCESS_VIOLATION at
+# cgamex86_64.dll@bdac) when our varcommand/svinfo_report lands too early.
+# Hold those commands back for a while after CL_InitCGame.
+CGAME_INIT_TIME = 0.0
+CGAME_INIT_GRACE = 10  # seconds
+
+
+def cgame_grace_remaining():
+    return max(0.0, CGAME_INIT_TIME + CGAME_INIT_GRACE - time.time())
 IGNORE_IPS = []
 CONNECTING = False
 VID_RESTARTING = False
@@ -793,6 +803,8 @@ def start():
                 except Exception as e:
                     logging.error(f"Error saving serverstate to file: {e}")
 
+                if not PAUSE_STATE and cgame_grace_remaining() > 0:
+                    continue  # map just loaded - see CGAME_INIT_GRACE
                 if not PAUSE_STATE:
                     # Echo spectated player's input keys to console so console.py captures them
                     # into STATE.current_inputs (used by AFK detection). We used to stuff this into

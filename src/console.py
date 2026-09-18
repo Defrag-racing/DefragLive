@@ -293,6 +293,34 @@ def log_kick_outcome(outcome):
         with open(_kick_incident_log_path(), 'a', encoding='utf-8') as f:
             f.write(f"outcome: {outcome}\n\n")
         PENDING_KICK_INCIDENT_T = None
+
+
+# --- Game error log -----------------------------------------------------------
+# One line per caught game error / recovery trigger in logs/game_errors.log, so
+# we can count how often each kind happens and whether it follows a map load
+# (cgame-proxymod ACCESS_VIOLATION) or a command we just sent.
+def log_game_error(error, action):
+    try:
+        now = time.time()
+        st = getattr(serverstate, 'STATE', None)
+        prev = PREVIOUS_LINE.get('content', '') if isinstance(PREVIOUS_LINE, dict) else PREVIOUS_LINE
+        fields = [
+            time.strftime('%Y-%m-%d %H:%M:%S'),
+            _strip_colors(error)[:120],
+            f"action={action}",
+            f"server={serverstate.CURRENT_IP or '?'}",
+            f"map={getattr(st, 'mapname', '?') if st else '?'}",
+        ]
+        if serverstate.CGAME_INIT_TIME:
+            fields.append(f"since_map_load={now - serverstate.CGAME_INIT_TIME:.1f}s")
+        if api.LAST_COMMAND_TIME:
+            fields.append(f'last_cmd="{(api.LAST_COMMAND or "")[:80]}" ({now - api.LAST_COMMAND_TIME:.1f}s ago)')
+        fields.append(f'prev_line="{_strip_colors(str(prev))[:100]}"')
+
+        with open(os.path.join(environ['LOG_DIR_PATH'], 'game_errors.log'), 'a', encoding='utf-8') as f:
+            f.write(' | '.join(fields) + '\n')
+    except Exception as e:
+        logging.error(f"Failed to write game_errors.log: {e}")
 # -----------------------------------------------------------------------------
 
 
@@ -301,7 +329,9 @@ def handle_error_with_delay(error_line, error_action):
     Handle error detection with appropriate delays and actions
     """
     global LAST_ERROR_TIME
-    
+
+    log_game_error(error_line, error_action)
+
     if error_action == "MAP_ERROR":
         logging.info(f"Map loading error detected: {error_line}")
         map_name_match = re.search(r"couldn't load maps/(.+?)\.bsp", error_line)
@@ -743,6 +773,7 @@ def process_line(line):
                 UNKNOWN_CMD_RECOVERY_TRIGGERED = True
                 logging.critical(f"CRASHED CGAME DETECTED: {UNKNOWN_CMD_COUNT} consecutive 'Unknown command' lines - cgame is unloaded")
                 logging.critical("Triggering smart recovery for crashed cgame...")
+                log_game_error("Crashed cgame - Unknown command spam", "RECONNECT")
                 serverstate.RECOVERY_ATTEMPTS = 1  # Skip state resume, go to reconnect
                 serverstate.smart_connection_recovery("Crashed cgame - Unknown command spam detected")
         else:
@@ -836,6 +867,9 @@ def process_line(line):
 
         if serverstate.CONNECTING:
             logging.info(f"[DEBUG] CONNECTING=True, checking line: {line}")
+
+        if line.startswith("CL_InitCGame:"):
+            serverstate.CGAME_INIT_TIME = time.time()
 
         if ((line.startswith('Not recording a demo.') and not serverstate.CONNECTING) or
             line.startswith("report written to system/reports/initialstate.txt") or
@@ -960,6 +994,12 @@ def process_line(line):
                     if serverstate.PAUSE_STATE or serverstate.CONNECTING:
                         logging.warning("Delayed state init: timed out waiting for game to load (30s)")
                         return
+                    # svinfo_report right after a map load can crash cgame-proxymod
+                    grace = serverstate.cgame_grace_remaining()
+                    if grace > 0:
+                        time.sleep(grace)
+                        if serverstate.PAUSE_STATE or serverstate.CONNECTING:
+                            return
                     logging.info("Forcing state initialization after connection")
                     api.exec_command("team s;svinfo_report serverstate.txt;svinfo_report initialstate.txt")
                     serverstate.initialize_state(True)

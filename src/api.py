@@ -56,7 +56,14 @@ def api_init():
         raise WindowNotFoundError(f"Could not initialize windows: {e}")
 
 
+# Last command sent to the game, for correlating crashes in game_errors.log
+LAST_COMMAND = None
+LAST_COMMAND_TIME = 0.0
+
+
 def exec_command(cmd, verbose=True):
+    global LAST_COMMAND, LAST_COMMAND_TIME
+    LAST_COMMAND, LAST_COMMAND_TIME = cmd, time.time()
     if verbose:
         logging.info(f"Execing command {cmd}")
     # Escape AHK1 special chars in the command text:

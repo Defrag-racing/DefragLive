@@ -321,6 +321,7 @@ if __name__ == "__main__":
                         logging.warning(f"WATCHDOG: Game NOT RESPONDING during map loading for {hung_duration:.0f}s (limit: {hung_limit}s)")
                     if hung_duration >= hung_limit:
                         logging.critical(f"WATCHDOG: Killing hung game process after {hung_limit}s (loading={is_loading})")
+                        console.log_game_error(f"Game NOT RESPONDING for {hung_limit}s (loading={is_loading})", "KILL_GAME")
                         kill_game_processes()
                         hung_since = None
                         last_api_success = current_time
@@ -339,6 +340,7 @@ if __name__ == "__main__":
                     if current_time - last_api_success > 120:
                         logging.critical("=" * 60)
                         logging.critical("HEALTH CHECK: GAME PROCESS KILL TRIGGERED")
+                        console.log_game_error(f"Game unresponsive to API for {current_time - last_api_success:.0f}s", "KILL_GAME")
                         logging.critical(f"Game has been unresponsive for {current_time - last_api_success:.0f} seconds")
                         logging.critical(f"Last successful API call: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_api_success))}")
                         logging.critical(f"Current time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time))}")
