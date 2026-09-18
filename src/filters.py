@@ -187,9 +187,23 @@ def filter_line_data(data):
     return data
 
 
+# Cap on leetspeak variants per message. Every '1', '4', '6', '8', '!' and '|'
+# doubles the count, so a long run of numbers (e.g. XPC's "jumps: 1365 1407 ..."
+# speed readout) exploded into 134M strings, ate all RAM and froze the whole PC.
+MAX_SPECIAL_COMBINATIONS = 1024
+
+
 # https://stackoverflow.com/questions/68731323/replace-numbers-with-letters-and-offer-all-permutations
 def replace_special_chars(msg):
     all_items = [SPECIAL_NUMBERS.get(char, [char]) for char in msg]
+
+    combinations = 1
+    for items in all_items:
+        combinations *= len(items)
+        if combinations > MAX_SPECIAL_COMBINATIONS:
+            # Too many variants - use just the first substitution for each char
+            return [''.join(items[0] for items in all_items)]
+
     return [''.join(elem) for elem in itertools.product(*all_items)]
 
 
